@@ -1,5 +1,5 @@
-// 🔧 Change this to your Railway backend URL after deployment
-const API_BASE = "http://localhost:8000";  // Change to: https://your-app.up.railway.app
+// 🔧 Production API URL
+const API_BASE = "https://indiasearch-production.up.railway.app";
 
 const searchInput = document.getElementById("searchInput");
 const resultsBox = document.getElementById("results");
