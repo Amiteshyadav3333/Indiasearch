@@ -90,12 +90,11 @@ async function search() {
             const resultDiv = document.createElement('div');
             resultDiv.className = 'result-item';
             resultDiv.innerHTML = `
-                <div class="result-number">${index + 1}</div>
                 <div class="result-content">
                     <a href="${item.url}" target="_blank" class="result-title">
                         ${item.title}
                     </a>
-                    <div class="result-url">${item.url}</div>
+                    <div class="result-url">${new URL(item.url).hostname}</div>
                     <p class="result-snippet">${item.snippet || ''}</p>
                     <a href="${item.url}" target="_blank" class="visit-btn">Visit Website →</a>
                 </div>

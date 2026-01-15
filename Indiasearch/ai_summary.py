@@ -25,26 +25,25 @@ def local_summarize(query, docs):
     """
     Free fallback summary system
     """
-
-    text = ""
-
-    for d in docs[:5]:
-        text += f" {d.get('title','')} - {d.get('content','')}"
-
-    text = clean(text)
-
-    if len(text) < 40:
+    if not docs or len(docs) == 0:
         return None
 
-    text = shorten(text, 900)
+    # Combine content from top results
+    combined_text = ""
+    for d in docs[:3]:
+        title = d.get('title', '')
+        snippet = d.get('snippet', '') or d.get('content', '')[:200]
+        combined_text += f"{title}. {snippet} "
 
-    return f"""
-AI Smart Answer 🧠
+    combined_text = clean(combined_text)
 
-Based on your search "{query}", here is a helpful summary:
+    if len(combined_text) < 50:
+        return f"Found {len(docs)} results for '{query}'. Check the links below for detailed information."
 
-{text[:280]}...
-    """.strip()
+    # Create smart summary
+    summary_text = combined_text[:300]
+    
+    return f"Based on search results: {summary_text}... See detailed results below."
 
 
 # ========= OPENAI MODE =============
