@@ -16,10 +16,11 @@ import translator
 
 app = FastAPI()
 
-# CORS for production
+# CORS for production - MUST be before routes
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -45,11 +46,18 @@ async def home():
 
 @app.get("/search")
 async def search(q: str):
-    translated, lang = translator.translate_query_to_english(q)
-    results = search_module.search_query(es, INDEX, translated)
-    summary = ai_summary.generate_ai_summary(q, results)
-    
-    return {
-        "summary": summary,
-        "results": results
-    }
+    try:
+        translated, lang = translator.translate_query_to_english(q)
+        results = search_module.search_query(es, INDEX, translated)
+        summary = ai_summary.generate_ai_summary(q, results)
+        
+        return {
+            "summary": summary,
+            "results": results
+        }
+    except Exception as e:
+        return {
+            "error": str(e),
+            "summary": None,
+            "results": []
+        }
