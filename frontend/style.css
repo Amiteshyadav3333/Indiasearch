@@ -43,6 +43,45 @@ body.light{
   padding:10px 0;
 }
 
+.header-controls{
+  display:flex;
+  gap:10px;
+  align-items:center;
+}
+
+/* LANGUAGE SELECT */
+.language-select{
+  padding:8px 12px;
+  border:1px solid #dadce0;
+  border-radius:20px;
+  cursor:pointer;
+  font-size:14px;
+  background:#fff;
+  color:#202124;
+  transition:all 0.2s;
+  outline:none;
+}
+
+.language-select:hover{
+  background:#f8f9fa;
+  box-shadow:0 1px 3px rgba(0,0,0,0.1);
+}
+
+.language-select:focus{
+  border-color:#1a73e8;
+  box-shadow:0 0 0 2px rgba(26,115,232,0.1);
+}
+
+body.dark .language-select{
+  background:#303134;
+  border-color:#5f6368;
+  color:#e8eaed;
+}
+
+body.dark .language-select:hover{
+  background:#3c4043;
+}
+
 /* DARK MODE BUTTON */
 .mode-btn{
   padding:10px 16px;

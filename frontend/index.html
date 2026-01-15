@@ -15,7 +15,18 @@
         <h1 class="logo">
             <span style="color:#ff4444">India</span><span style="color:#4285F4">Search</span>
         </h1>
-        <button onclick="toggleMode()" class="mode-btn">🌙</button>
+        <div class="header-controls">
+            <select id="languageSelect" class="language-select" title="Translate Results">
+                <option value="en">English</option>
+                <option value="hi">हिन्दी</option>
+                <option value="es">Español</option>
+                <option value="fr">Français</option>
+                <option value="de">Deutsch</option>
+                <option value="ja">日本語</option>
+                <option value="zh">中文</option>
+            </select>
+            <button onclick="toggleMode()" class="mode-btn" title="Dark Mode">🌙</button>
+        </div>
     </div>
 
     <div class="search-box">
