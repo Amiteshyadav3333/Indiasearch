@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Indiasearch – Smart AI Search Engine</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<div class="container">
+
+    <div class="header">
+        <h1 class="logo">
+            <span style="color:#ff4444">India</span><span style="color:#4285F4">Search</span>
+        </h1>
+        <button onclick="toggleMode()" class="mode-btn">🌙</button>
+    </div>
+
+    <div class="search-box">
+        <input id="searchInput" type="text" placeholder="Search anything…">
+        <button onclick="search()">Search</button>
+    </div>
+
+    <div id="trending" class="suggest-box"></div>
+    <div id="aiSummary" class="summary-container"></div>
+    <div id="results" class="results"></div>
+
+</div>
+
+<script src="app.js"></script>
+
+</body>
+</html>
