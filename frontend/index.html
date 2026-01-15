@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Indiasearch – Smart AI Search Engine</title>
+    <title>Indiasearch – AI Voice Search Engine</title>
     <link rel="stylesheet" href="style.css">
 </head>
 
@@ -20,10 +20,10 @@
 
     <div class="search-box">
         <input id="searchInput" type="text" placeholder="Search anything…">
-        <button onclick="search()">Search</button>
+        <button onclick="toggleVoiceSearch()" id="micButton" class="mic-btn" title="Voice Search">🎙️</button>
+        <button onclick="search()" class="search-btn">Search</button>
     </div>
 
-    <div id="trending" class="suggest-box"></div>
     <div id="aiSummary" class="summary-container"></div>
     <div id="results" class="results"></div>
 
