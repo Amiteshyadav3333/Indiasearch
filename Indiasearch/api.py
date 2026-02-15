@@ -46,9 +46,14 @@ async def home():
 
 @app.get("/search")
 async def search(q: str):
+    print(f"SEARCH ROUTE HIT: q={q}")
     try:
         translated, lang = translator.translate_query_to_english(q)
+        print(f"TRANSLATED: {translated}")
+        
         results = search_module.search_query(es, INDEX, translated)
+        print(f"RESULTS COUNT: {len(results)}")
+        
         summary = ai_summary.generate_ai_summary(q, results)
         
         return {
@@ -56,6 +61,7 @@ async def search(q: str):
             "results": results
         }
     except Exception as e:
+        print(f"API ERROR: {e}")
         return {
             "error": str(e),
             "summary": None,

@@ -1,46 +1,64 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
-    <title>Indiasearch – Smart AI Search Engine</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Indiasearch – AI Voice Search Engine</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 
 <body>
 
-<div class="container">
+    <div class="container">
 
-    <!-- HEADER / LOGO -->
-    <div class="header">
-        <h1 class="logo">
-            <span style="color:#ff4444">India</span><span style="color:#4285F4">Search</span>
-        </h1>
+        <div class="header">
+            <h1 class="logo">
+                <span style="color:#ff4444">India</span><span style="color:#4285F4">Search</span>
+            </h1>
+            <div class="header-controls">
+                <select id="languageSelect" class="language-select" title="Translate Results">
+                    <option value="en">English (English)</option>
+                    <option value="hi">Hindi (हिंदी)</option>
+                    <option value="as">Assamese (असमिया)</option>
+                    <option value="bn">Bengali (बंगाली)</option>
+                    <option value="brx">Bodo (बोडो)</option>
+                    <option value="doi">Dogri (डोगरी)</option>
+                    <option value="gu">Gujarati (गुजराती)</option>
+                    <option value="kn">Kannada (कन्नड़)</option>
+                    <option value="ks">Kashmiri (कश्मीरी)</option>
+                    <option value="gom">Konkani (कोंकणी)</option>
+                    <option value="mai">Maithili (मैथिली)</option>
+                    <option value="ml">Malayalam (मलयालम)</option>
+                    <option value="mni">Manipuri (मणिपुरी)</option>
+                    <option value="mr">Marathi (मराठी)</option>
+                    <option value="ne">Nepali (नेपाली)</option>
+                    <option value="or">Odia (उड़िया)</option>
+                    <option value="pa">Punjabi (पंजाबी)</option>
+                    <option value="sa">Sanskrit (संस्कृत)</option>
+                    <option value="sat">Santhali (संथाली)</option>
+                    <option value="sd">Sindhi (सिंधी)</option>
+                    <option value="ta">Tamil (तमिल)</option>
+                    <option value="te">Telugu (तेलुगु)</option>
+                    <option value="ur">Urdu (उर्दू)</option>
+                </select>
+                <button onclick="toggleMode()" class="mode-btn" title="Dark Mode">🌙</button>
+            </div>
+        </div>
 
-        <button onclick="toggleMode()" class="mode-btn">🌙</button>
+        <div class="search-box">
+            <input id="searchInput" type="text" placeholder="Search anything…">
+            <button onclick="toggleVoiceSearch()" id="micButton" class="mic-btn" title="Voice Search">🎙️</button>
+            <button onclick="search()" class="search-btn">Search</button>
+        </div>
+
+        <div id="aiSummary" class="summary-container"></div>
+        <div id="results" class="results"></div>
+
     </div>
 
-
-    <!-- SEARCH BOX -->
-    <div class="search-box">
-        <input id="searchInput" type="text" placeholder="Search anything…">
-        <button onclick="search()">Search</button>
-    </div>
-
-
-    <!-- SUGGESTIONS -->
-    <div id="trending" class="suggest-box"></div>
-
-
-    <!-- AI SUMMARY -->
-    <div id="aiSummary" class="summary-container"></div>
-
-
-    <!-- RESULTS -->
-    <div id="results" class="results"></div>
-
-</div>
-
-<script src="/static/app.js"></script>
+    <script src="/static/app.js"></script>
 
 </body>
+
 </html>
