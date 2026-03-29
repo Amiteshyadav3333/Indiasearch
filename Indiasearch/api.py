@@ -1,5 +1,7 @@
 import os
 import sys
+from dotenv import load_dotenv
+load_dotenv()
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 if CURRENT_DIR not in sys.path:
@@ -29,9 +31,9 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Connect to Elasticsearch
-ELASTIC_URL = os.getenv("ELASTIC_URL", "https://606ffdc0ae1d4bd1901e6b4b9d84df28.ap-south-1.aws.elastic-cloud.com:443")
-ELASTIC_USER = os.getenv("ELASTIC_USERNAME", "elastic")
-ELASTIC_PASS = os.getenv("ELASTIC_PASSWORD", "mRxpkXduHB0A0MvOLS2IABmX")
+ELASTIC_URL = os.getenv("ELASTIC_URL")
+ELASTIC_USER = os.getenv("ELASTIC_USERNAME")
+ELASTIC_PASS = os.getenv("ELASTIC_PASSWORD")
 
 es = Elasticsearch(ELASTIC_URL, basic_auth=(ELASTIC_USER, ELASTIC_PASS))
 

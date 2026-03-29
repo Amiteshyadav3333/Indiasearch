@@ -8,9 +8,9 @@ import os
 from elasticsearch import Elasticsearch
 
 # Elasticsearch credentials
-ELASTIC_URL = os.getenv("ELASTIC_URL", "https://606ffdc0ae1d4bd1901e6b4b9d84df28.ap-south-1.aws.elastic-cloud.com:443")
-ELASTIC_USER = os.getenv("ELASTIC_USERNAME", "elastic")
-ELASTIC_PASSWORD = os.getenv("ELASTIC_PASSWORD", "mRxpkXduHB0A0MvOLS2IABmX")
+ELASTIC_URL = os.getenv("ELASTIC_URL")
+ELASTIC_USER = os.getenv("ELASTIC_USERNAME")
+ELASTIC_PASSWORD = os.getenv("ELASTIC_PASSWORD")
 
 INDEX_NAME = "indiasearch"
 

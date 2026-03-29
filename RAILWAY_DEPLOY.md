@@ -27,13 +27,13 @@ Railway will automatically:
 
 ```
 ELASTIC_URL
-https://606ffdc0ae1d4bd1901e6b4b9d84df28.ap-south-1.aws.elastic-cloud.com:443
+your_elastic_url
 
 ELASTIC_USERNAME
 elastic
 
 ELASTIC_PASSWORD
-mRxpkXduHB0A0MvOLS2IABmX
+your_elastic_password
 ```
 
 5. Railway will auto-redeploy

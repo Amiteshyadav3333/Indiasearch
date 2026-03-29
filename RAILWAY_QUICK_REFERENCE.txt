@@ -16,7 +16,7 @@
 Variable 1:
 -----------
 Name: ELASTIC_URL
-Value: https://606ffdc0ae1d4bd1901e6b4b9d84df28.ap-south-1.aws.elastic-cloud.com:443
+Value: your_elastic_url
 
 Variable 2:
 -----------
@@ -26,7 +26,7 @@ Value: elastic
 Variable 3:
 -----------
 Name: ELASTIC_PASSWORD
-Value: mRxpkXduHB0A0MvOLS2IABmX
+Value: your_elastic_password
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 

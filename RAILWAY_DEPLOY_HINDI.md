@@ -61,7 +61,7 @@
    ```
    Variable Name: ELASTIC_URL
    
-   Value: https://606ffdc0ae1d4bd1901e6b4b9d84df28.ap-south-1.aws.elastic-cloud.com:443
+   Value: your_elastic_url
    ```
    - "Add" pe click karo
 
@@ -77,7 +77,7 @@
    ```
    Variable Name: ELASTIC_PASSWORD
    
-   Value: mRxpkXduHB0A0MvOLS2IABmX
+   Value: your_elastic_password
    ```
    - "Add" pe click karo
 

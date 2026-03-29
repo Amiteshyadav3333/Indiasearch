@@ -42,9 +42,9 @@ git push -u origin main
 - Go to Variables tab
 - Add these:
 ```
-ELASTIC_URL=https://606ffdc0ae1d4bd1901e6b4b9d84df28.ap-south-1.aws.elastic-cloud.com:443
+ELASTIC_URL=your_elastic_url
 ELASTIC_USERNAME=elastic
-ELASTIC_PASSWORD=mRxpkXduHB0A0MvOLS2IABmX
+ELASTIC_PASSWORD=your_elastic_password
 ```
 
 7. Copy your Railway URL (e.g., `https://indiasearch-production.up.railway.app`)
