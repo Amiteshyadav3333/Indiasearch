@@ -9,6 +9,14 @@
 
 <body>
 
+<!-- LOADING SPINNER OVERLAY -->
+<div id="spinnerOverlay" class="spinner-overlay">
+  <div class="spinner-box">
+    <div class="spinner"></div>
+    <p class="spinner-text">Searching...</p>
+  </div>
+</div>
+
 <div class="container">
 
     <div class="header">
@@ -25,7 +33,7 @@
                 <option value="ja">日本語</option>
                 <option value="zh">中文</option>
             </select>
-            <button onclick="toggleMode()" class="mode-btn" title="Dark Mode">🌙</button>
+            <button onclick="toggleMode()" id="modeBtn" class="mode-btn" title="Dark Mode">🌙</button>
         </div>
     </div>
 

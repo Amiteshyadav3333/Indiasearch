@@ -6,9 +6,51 @@ const resultsBox = document.getElementById("results");
 const aiSummaryBox = document.getElementById("aiSummary");
 const micButton = document.getElementById("micButton");
 const languageSelect = document.getElementById("languageSelect");
+const modeBtn = document.getElementById("modeBtn");
+const spinnerOverlay = document.getElementById("spinnerOverlay");
 
 let recognition;
 let isListening = false;
+
+// =====================
+// DARK MODE - localStorage
+// =====================
+function applyTheme(theme) {
+    if (theme === 'dark') {
+        document.body.classList.add('dark');
+        document.body.classList.remove('light');
+        modeBtn.innerHTML = '☀️';
+        modeBtn.title = 'Switch to Light Mode';
+    } else {
+        document.body.classList.remove('dark');
+        document.body.classList.add('light');
+        modeBtn.innerHTML = '🌙';
+        modeBtn.title = 'Switch to Dark Mode';
+    }
+}
+
+// Load saved theme on page load
+const savedTheme = localStorage.getItem('indiasearch_theme') || 'light';
+applyTheme(savedTheme);
+
+function toggleMode() {
+    const isDark = document.body.classList.contains('dark');
+    const newTheme = isDark ? 'light' : 'dark';
+    localStorage.setItem('indiasearch_theme', newTheme);
+    applyTheme(newTheme);
+}
+
+// =====================
+// SPINNER
+// =====================
+function showSpinner(text = 'Searching...') {
+    spinnerOverlay.querySelector('.spinner-text').textContent = text;
+    spinnerOverlay.classList.add('active');
+}
+
+function hideSpinner() {
+    spinnerOverlay.classList.remove('active');
+}
 
 // Google Translate API (Free)
 async function translateText(text, targetLang) {
@@ -63,7 +105,7 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
 
 function toggleVoiceSearch() {
     if (!recognition) {
-        alert('Voice search not supported in your browser');
+        resultsBox.innerHTML = "<p class='error'>⚠️ Voice search not supported in your browser. Try Chrome!</p>";
         return;
     }
 
@@ -80,12 +122,15 @@ async function search() {
 
     const targetLang = languageSelect.value;
 
-    resultsBox.innerHTML = "<div class='loading'>🔍 Searching...</div>";
-    aiSummaryBox.innerHTML = "";
+    showSpinner('Searching...');
+    resultsBox.innerHTML = '';
+    aiSummaryBox.innerHTML = '';
 
     try {
         let res = await fetch(`${API_BASE}/search?q=${encodeURIComponent(query)}`);
         let data = await res.json();
+
+        hideSpinner();
 
         // AI Summary with translation
         if (data.summary) {
@@ -98,27 +143,22 @@ async function search() {
             `;
         }
 
-        resultsBox.innerHTML = "";
-
         if (!data.results || data.results.length === 0) {
             const noResultsText = await translateText('No results found', targetLang);
             resultsBox.innerHTML = `<p class='no-results'>❌ ${noResultsText}</p>`;
             return;
         }
 
-        // Translate and display results
         for (const item of data.results) {
             const translatedTitle = await translateText(item.title, targetLang);
             const translatedSnippet = await translateText(item.snippet || '', targetLang);
             const visitText = await translateText('Visit Website', targetLang);
-            
+
             const resultDiv = document.createElement('div');
             resultDiv.className = 'result-item';
             resultDiv.innerHTML = `
                 <div class="result-content">
-                    <a href="${item.url}" target="_blank" class="result-title">
-                        ${translatedTitle}
-                    </a>
+                    <a href="${item.url}" target="_blank" class="result-title">${translatedTitle}</a>
                     <div class="result-url">${new URL(item.url).hostname}</div>
                     <p class="result-snippet">${translatedSnippet}</p>
                     <a href="${item.url}" target="_blank" class="visit-btn">${visitText} →</a>
@@ -127,7 +167,8 @@ async function search() {
             resultsBox.appendChild(resultDiv);
         }
     } catch (e) {
-        const errorText = await translateText('Error connecting to server', targetLang);
+        hideSpinner();
+        const errorText = await translateText('Error connecting to server. Please try again.', targetLang);
         resultsBox.innerHTML = `<p class='error'>⚠️ ${errorText}</p>`;
         console.error(e);
     }
@@ -139,8 +180,9 @@ searchInput.addEventListener("keyup", (e)=>{
     }
 });
 
-function toggleMode(){
-    document.body.classList.toggle("light");
-    const icon = document.body.classList.contains('light') ? '☀️' : '🌙';
-    document.querySelector('.mode-btn').innerHTML = icon;
+function toggleMode() {
+    const isDark = document.body.classList.contains('dark');
+    const newTheme = isDark ? 'light' : 'dark';
+    localStorage.setItem('indiasearch_theme', newTheme);
+    applyTheme(newTheme);
 }
