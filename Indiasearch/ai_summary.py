@@ -48,22 +48,22 @@ def local_summarize(query, docs):
 
 # ========= OPENAI MODE =============
 
-def openai_summary(query, docs):
+def openai_summary(query, docs, strict=False):
 
     content = ""
 
     for d in docs[:6]:
         content += f"\nTITLE: {d.get('title')}\nTEXT: {d.get('content')}\n"
 
+    strictness = "Answer directly and concisely in 1-2 lines. Example: 'There are exactly 22 scheduled languages in India.' Do not add any extra info. No conversational fluff." if strict else "Use short, clear bullet points. Avoid fake or unverified claims. Then end with: 'Results below 👇'"
+
     prompt = f"""
-You are a search engine AI assistant.
-Summarize the key answer for the user query:
+You are Google AI Overview assistant.
+Summarize the key answer exactly for the user query:
 
 Query: {query}
 
-Use short, clear bullet points.
-Avoid fake or unverified claims.
-Then end with: "Results below 👇"
+{strictness}
 
 Content:
 {content}
@@ -80,7 +80,7 @@ Content:
 
 # ===== MAIN FUNCTION TO CALL =======
 
-def generate_ai_summary(query, docs):
+def generate_ai_summary(query, docs, strict=False):
     """
     query: user search string
     docs: list of elasticsearch docs
@@ -91,7 +91,7 @@ def generate_ai_summary(query, docs):
 
     try:
         if USE_OPENAI:
-            return openai_summary(query, docs)
+            return openai_summary(query, docs, strict)
 
         else:
             return local_summarize(query, docs)

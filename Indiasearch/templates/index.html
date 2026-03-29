@@ -47,14 +47,45 @@
         </div>
 
         <div class="search-box">
-            <input id="searchInput" type="text" placeholder="Search anything…">
+            <input id="searchInput" type="text" placeholder="Search anything…" autocomplete="off">
             <button onclick="toggleVoiceSearch()" id="micButton" class="mic-btn" title="Voice Search">🎙️</button>
-            <button onclick="search()" class="search-btn">Search</button>
+            <button onclick="search(1, false)" class="search-btn">Search</button>
+            <button onclick="search(1, true)" class="ai-btn" title="AI Overview">✨ Ask AI</button>
+            <div id="autocompleteDropdown" class="autocomplete-dropdown" style="display: none;"></div>
+        </div>
+
+        <div id="searchFilters" class="search-filters" style="display: none;">
+            <button class="filter-btn active" onclick="setFilter('all')">🔍 All</button>
+            <button class="filter-btn" onclick="setFilter('news')">📰 News</button>
+            <button class="filter-btn" onclick="setFilter('images')">🖼️ Images</button>
+            <button class="filter-btn" onclick="setFilter('videos')">🎥 Videos</button>
+        </div>
+
+        <div id="searchHistory" class="history-container"></div>
+
+        <div id="trendingContainer" class="trending-container">
+            <h3>📈 Trending in India</h3>
+            <div class="trending-grid">
+                <!-- Populated by JS -->
+            </div>
         </div>
 
         <div id="aiSummary" class="summary-container"></div>
         <div id="results" class="results"></div>
+        <div class="pagination-container" id="pagination" style="display: none;"></div>
 
+    </div>
+    
+    <!-- Image Zoom Modal -->
+    <div id="imageModal" class="image-modal" style="display:none;" onclick="if(event.target === this) closeImageModal()">
+        <div class="modal-header-actions">
+            <span class="three-dot-menu" onclick="toggleDownloadMenu()">⋮</span>
+            <div id="downloadMenu" class="download-menu" style="display:none;">
+                <a id="downloadBtn" class="download-btn">📥 Download</a>
+            </div>
+            <span class="close-modal" onclick="closeImageModal()">&times;</span>
+        </div>
+        <img class="modal-content" id="zoomedImage">
     </div>
 
     <script src="/static/app.js"></script>

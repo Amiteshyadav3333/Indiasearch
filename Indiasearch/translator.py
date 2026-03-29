@@ -79,14 +79,26 @@ Text:
 
 # ----------- PUBLIC API FUNCTIONS -----------------
 
+import requests
+
+def free_google_translate(text, target_lang):
+    try:
+        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={target_lang}&dt=t&q={text}"
+        res = requests.get(url, timeout=3)
+        if res.status_code == 200:
+            return "".join([item[0] for item in res.json()[0]])
+    except Exception as e:
+        print("Google Translate Error:", e)
+    return text
+
 def translate_query_to_english(query):
     """
     user query → English
     """
-
     lang = detect_language(query)
 
-    if lang == "en":
+    if lang == "en" and not re.search(r"[^\x00-\x7F]", query):
+        # Only skip if it's purely ascii
         return query, "en"
 
     # Try OpenAI first
@@ -94,22 +106,30 @@ def translate_query_to_english(query):
         translated = openai_translate(query, "en")
         return translated, lang
 
-    # Offline fallback
-    translated = offline_translate(query, "hi", "en")
+    # Google Translate fallback
+    translated = free_google_translate(query, "en")
+    
+    # Offline fallback if Google fails
+    if translated == query and lang == "hi":
+        translated = offline_translate(query, "hi", "en")
+        
     return translated, lang
-
 
 
 def translate_result(text, target_lang):
     """
     translate search result summary back to user lang
     """
-
     if target_lang == "en":
         return text
 
     if USE_OPENAI:
         return openai_translate(text, target_lang)
 
-    # offline fallback
-    return offline_translate(text, "en", "hi")
+    # Google Translate Fallback
+    translated = free_google_translate(text, target_lang)
+    if translated != text:
+        return translated
+
+    # Offline fallback
+    return offline_translate(text, "en", target_lang)

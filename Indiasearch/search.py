@@ -1,4 +1,6 @@
 from elasticsearch import Elasticsearch
+from ddgs import DDGS
+import asyncio
 import re
 
 # Mock Data for Fallback
@@ -104,9 +106,12 @@ def local_search(query):
     return results
 
 
-def search_query(es: Elasticsearch, index: str, query: str):
+async def search_query(es: Elasticsearch, index: str, query: str, page: int = 1):
     
     results = []
+    total_hits = 0
+    size = 10
+    from_ = (page - 1) * size
 
     # 1. Try Elasticsearch
     try:
@@ -126,10 +131,13 @@ def search_query(es: Elasticsearch, index: str, query: str):
                         "content": {}
                     }
                 },
-                "size": 10
+                "size": size,
+                "from": from_
             }
 
             res = es.search(index=index, body=body)
+            total = res["hits"]["total"]
+            total_hits = total["value"] if isinstance(total, dict) else total
 
             for hit in res["hits"]["hits"]:
                 source = hit["_source"]
@@ -148,9 +156,78 @@ def search_query(es: Elasticsearch, index: str, query: str):
         print(f"ES Search Error (falling back to local): {e}")
         pass
 
-    # 2. If no results from ES (or error), use Local Mock Search
+    # 2. If no results from ES (or error), use Global Web Search Fallback (DuckDuckGo API)
     if not results:
-        print("⚠️ No results from ES, using local backup...")
-        results = local_search(query)
+        print("⚠️ No local ES results, dynamically fetching from GLOBAL WEB via API...")
+        try:
+            fetch_limit = from_ + size + 10
+            
+            def fetch_ddg():
+                return list(DDGS().text(query, max_results=fetch_limit))
+            
+            raw_results = await asyncio.to_thread(fetch_ddg)
+            all_results = []
+            for r in raw_results:
+                all_results.append({
+                    "title": r.get('title', 'Global Result'),
+                    "url": r.get('href', ''),
+                    "snippet": r.get('body', ''),
+                    "score": 1.0
+                })
+            
+            # Simulated large hitpool for frontend pagination calculation
+            total_hits = max(len(all_results), 50 if len(all_results) > 10 else len(all_results))
+            results = all_results[from_:from_ + size]
+        except Exception as e:
+            print(f"Global API Error: {e}")
+            all_results = local_search(query)
+            total_hits = len(all_results)
+            results = all_results[from_:from_ + size]
 
-    return results
+    return results, total_hits
+
+async def global_image_search(query: str, page: int = 1):
+    size = 10
+    from_ = (page - 1) * size
+    try:
+        def fetch_img():
+            return list(DDGS().images(query, max_results=from_ + size + 10))
+        
+        raw_results = await asyncio.to_thread(fetch_img)
+        results = []
+        for r in raw_results[from_ : from_ + size]:
+            results.append({
+                "title": r.get("title", "Image Result"),
+                "url": r.get("image", ""),
+                "snippet": f"📸 Original Source: {r.get('source', 'Unknown')} | Resolution: {r.get('width')}x{r.get('height')}",
+                "score": 1.0
+            })
+        return results, min(len(raw_results), 100)
+    except Exception as e:
+        print(f"Image API Error: {e}")
+        return [], 0
+
+async def global_video_search(query: str, page: int = 1):
+    size = 10
+    from_ = (page - 1) * size
+    try:
+        def fetch_vid():
+            return list(DDGS().videos(query, max_results=from_ + size + 10))
+            
+        raw_results = await asyncio.to_thread(fetch_vid)
+        results = []
+        for r in raw_results[from_ : from_ + size]:
+            content_url = r.get("content") or r.get("href") or ""
+            publisher = r.get("publisher", "Video Platform")
+            duration = r.get("duration", "N/A")
+            
+            results.append({
+                "title": f"🎥 {r.get('title', 'Video Result')}",
+                "url": content_url,
+                "snippet": f"⏱️ Duration: {duration} | 🏢 Publisher: {publisher} | Click to stream video instantly.",
+                "score": 1.0
+            })
+        return results, min(len(raw_results), 100)
+    except Exception as e:
+        print(f"Video API Error: {e}")
+        return [], 0
