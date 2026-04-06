@@ -665,8 +665,9 @@ async def search(q: str, page: int = 1, filter: str = "all", ai_mode: bool = Fal
     stock_keywords = ["stock", "nifty", "sensex", "price", "share", "market", "nasdaq", "dow", "reliance share"]
     is_stock_intent = any(k in translated_lower for k in stock_keywords)
     
-    # Enforce Auth EXCEPT for News/Latest/Sports/Stocks
-    if not (is_news_intent or is_sports_intent or is_stock_intent):
+    # Enforce Auth EXCEPT for News/Sports/Stocks OR Ask AI (to allow guests to chat with PDF/Knowledge)
+    is_public = is_news_intent or is_sports_intent or is_stock_intent or filter == "askAI"
+    if not is_public:
         if not session_token:
             return JSONResponse({"error": "Authentication required. Please login or signup to use IndiaSearch."}, status_code=401)
             

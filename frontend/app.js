@@ -90,8 +90,12 @@ let isListening = false;
 let attachedScan = null;
 let authState = {
   sessionToken: localStorage.getItem("sessionToken") || "",
-  user: JSON.parse(localStorage.getItem("authUser") || "null")
+  user: JSON.parse(localStorage.getItem("authUser") || "null"),
+  guestSession: localStorage.getItem("guestSession") || `guest_${Math.random().toString(36).substr(2, 9)}`
 };
+if (!localStorage.getItem("guestSession")) {
+  localStorage.setItem("guestSession", authState.guestSession);
+}
 
 // ── Header scroll effect ──
 window.addEventListener("scroll", () => {
@@ -359,7 +363,9 @@ if (pdfInput) {
     
     const formData = new FormData();
     formData.append("file", f);
-    if (authState.sessionToken) formData.append("session_token", authState.sessionToken);
+    // Prefer sessionToken, fallback to persistent guestSession
+    const finalSess = authState.sessionToken || authState.guestSession;
+    formData.append("session_token", finalSess);
 
     try {
       const res = await fetch(`${activeApiBase}/upload-pdf`, {
@@ -472,7 +478,8 @@ async function search(pageNumber = 1, aiMode = false) {
   try {
     document.documentElement.setAttribute("data-ai-mode", aiMode ? "true" : "false");
     const params = new URLSearchParams({ q: query, page: String(pageNumber), filter: currentFilter, ai_mode: String(aiMode) });
-    if (authState.sessionToken) params.set("session_token", authState.sessionToken);
+    const finalSess = authState.sessionToken || authState.guestSession;
+    params.set("session_token", finalSess);
 
     const res = await fetchWithApiFallback(`/search?${params}`);
     let data;
