@@ -4,9 +4,12 @@ import re
 from urllib.parse import quote
 
 try:
-    from ddgs import DDGS
+    from duckduckgo_search import DDGS
 except ImportError:
-    DDGS = None
+    try:
+        from ddgs import DDGS
+    except ImportError:
+        DDGS = None
 
 # Mock Data for Fallback
 FAMOUS_WEBSITES = [
@@ -260,7 +263,8 @@ async def search_query(es: Elasticsearch, index: str, query: str, page: int = 1)
             fetch_limit = from_ + size + 10
             
             def fetch_ddg():
-                return list(DDGS().text(query, max_results=fetch_limit))
+                with DDGS() as ddgs:
+                    return list(ddgs.text(query, max_results=fetch_limit))
             
             raw_results = await asyncio.to_thread(fetch_ddg)
             all_results = []
@@ -291,7 +295,8 @@ async def global_image_search(query: str, page: int = 1):
             raise RuntimeError("ddgs is not installed in the active Python environment")
 
         def fetch_img():
-            return list(DDGS().images(query, max_results=from_ + size + 10))
+            with DDGS() as ddgs:
+                return list(ddgs.images(query, max_results=from_ + size + 10))
         
         raw_results = await asyncio.to_thread(fetch_img)
         results = []
@@ -334,7 +339,8 @@ async def global_video_search(query: str, page: int = 1):
             raise RuntimeError("ddgs is not installed in the active Python environment")
 
         def fetch_vid():
-            return list(DDGS().videos(query, max_results=from_ + size + 10))
+            with DDGS() as ddgs:
+                return list(ddgs.videos(query, max_results=from_ + size + 10))
             
         raw_results = await asyncio.to_thread(fetch_vid)
         results = []

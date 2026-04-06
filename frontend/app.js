@@ -769,6 +769,22 @@ async function sendResetEmail() {
   }
 }
 
+function toggleUserDropdown(e) {
+  if (e) e.stopPropagation();
+  const dropdown = document.getElementById("userDropdown");
+  if (!dropdown) return;
+  const isShown = dropdown.style.display === "flex";
+  dropdown.style.display = isShown ? "none" : "flex";
+}
+
+// Close dropdown when clicking outside
+window.addEventListener("click", () => {
+  const dropdown = document.getElementById("userDropdown");
+  if (dropdown && dropdown.style.display === "flex") {
+    dropdown.style.display = "none";
+  }
+});
+
 async function verifyTokenWithBackend(firebaseToken) {
   try {
     const res = await apiJsonRequest("/auth/firebase-login", { id_token: firebaseToken });
