@@ -45,14 +45,33 @@ your_elastic_password
 3. Click: **Generate Domain**
 4. Copy your URL (e.g., `indiasearch-production.up.railway.app`)
 
-## Step 5: Test Backend
+## Step 5: Configure Frontend Access
+
+Add one more variable in Railway:
+
+```
+FRONTEND_ORIGINS
+https://YOUR-VERCEL-APP.vercel.app
+```
+
+If you use a custom domain later, add both origins comma-separated:
+
+```
+https://YOUR-VERCEL-APP.vercel.app,https://yourdomain.com
+```
+
+## Step 6: Test Backend
 
 Open in browser:
 ```
-https://YOUR-RAILWAY-URL.up.railway.app/search?q=india
+https://YOUR-RAILWAY-URL.up.railway.app/health
 ```
 
-You should see JSON response with results!
+You should see:
+
+```json
+{"status":"ok"}
+```
 
 ---
 
@@ -71,6 +90,10 @@ Save this URL - you'll need it for Vercel frontend!
 - Check Logs tab for errors
 - Verify requirements.txt exists
 - Check Procfile syntax
+
+**CORS error from Vercel?**
+- Verify `FRONTEND_ORIGINS` is set correctly in Railway
+- Redeploy after changing Railway variables
 
 **No results?**
 - Verify environment variables are correct

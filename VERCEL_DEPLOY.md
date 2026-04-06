@@ -6,19 +6,7 @@
 ## Step 1: Update Frontend API URL
 
 1. Open: `frontend/app.js`
-2. Line 2, change:
-```javascript
-const API_BASE = "http://localhost:8000";
-```
-To:
-```javascript
-const API_BASE = "https://YOUR-RAILWAY-URL.up.railway.app";
-```
-Example:
-```javascript
-const API_BASE = "https://indiasearch-production.up.railway.app";
-```
-
+2. Set production API URL to your Railway backend
 3. Save file
 4. Commit and push:
 ```bash
@@ -95,8 +83,9 @@ Your frontend is now live!
 ## 🐛 Troubleshooting
 
 **CORS Error?**
-- Check API_BASE URL in app.js
+- Check API_BASE URL in `frontend/app.js`
 - Verify Railway backend is running
+- Verify `FRONTEND_ORIGINS` is set on Railway
 - Check browser console for errors
 
 **No results showing?**

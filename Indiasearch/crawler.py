@@ -2,8 +2,12 @@ import asyncio
 import aiohttp
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urldefrag, urlparse
-from indexer import index_document
 import re
+
+try:
+    from .indexer import index_document
+except ImportError:
+    from indexer import index_document
 
 class Crawler:
     def __init__(self, max_pages=300, max_depth=2, max_concurrency=15, timeout=7):

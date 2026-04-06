@@ -1,6 +1,7 @@
 import unittest
-from crawler import Crawler
-from search import make_snippet, clean_text
+
+from Indiasearch.crawler import Crawler
+from Indiasearch.search import make_snippet, clean_text
 
 class TestIndiasearchUtils(unittest.TestCase):
     

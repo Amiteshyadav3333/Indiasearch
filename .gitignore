@@ -1,3 +1,4 @@
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -5,7 +6,28 @@ __pycache__/
 .Python
 env/
 venv/
+ENV/
+
+# Database
+*.db
+*.sqlite3
+
+# Firebase & Secret Keys
+.env
+firebase-credentials.json
+*.json
+!railway.json
+!plugin.json
+
+# Logs & PIDs
 *.log
 *.pid
+
+# OS
 .DS_Store
-.env
+Thumbs.db
+
+# Build & Dist
+dist/
+build/
+*.egg-info/

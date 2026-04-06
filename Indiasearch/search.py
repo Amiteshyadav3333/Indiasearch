@@ -1,7 +1,12 @@
 from elasticsearch import Elasticsearch
-from ddgs import DDGS
 import asyncio
 import re
+from urllib.parse import quote
+
+try:
+    from ddgs import DDGS
+except ImportError:
+    DDGS = None
 
 # Mock Data for Fallback
 FAMOUS_WEBSITES = [
@@ -106,6 +111,95 @@ def local_search(query):
     return results
 
 
+def curated_thumbnail_url(query: str, title: str, domain: str, category: str) -> str:
+    text = f"{query} | {title}".lower()
+    domain_label = (domain or "web").replace("www.", "")[:28]
+
+    if category == "Tech":
+        palette = ("0f172a", "2563eb", "dbeafe")
+        label = "Tech Preview"
+        shape_svg = f"""
+          <rect x='620' y='120' width='180' height='120' rx='24' fill='rgba(255,255,255,0.12)' />
+          <rect x='650' y='150' width='120' height='10' rx='5' fill='rgba(255,255,255,0.55)' />
+          <rect x='650' y='176' width='90' height='10' rx='5' fill='rgba(255,255,255,0.35)' />
+          <rect x='620' y='490' width='220' height='36' rx='18' fill='rgba(255,255,255,0.1)' />
+        """
+    elif category == "News":
+        palette = ("7f1d1d", "dc2626", "fee2e2")
+        label = "News Preview"
+        shape_svg = f"""
+          <rect x='610' y='120' width='220' height='300' rx='28' fill='rgba(255,255,255,0.1)' />
+          <rect x='645' y='160' width='150' height='110' rx='18' fill='rgba(255,255,255,0.18)' />
+          <rect x='645' y='300' width='150' height='12' rx='6' fill='rgba(255,255,255,0.5)' />
+          <rect x='645' y='326' width='120' height='12' rx='6' fill='rgba(255,255,255,0.34)' />
+        """
+    elif category == "Jobs":
+        palette = ("14532d", "16a34a", "dcfce7")
+        label = "Jobs Preview"
+        shape_svg = f"""
+          <rect x='610' y='128' width='230' height='260' rx='28' fill='rgba(255,255,255,0.1)' />
+          <circle cx='725' cy='190' r='38' fill='rgba(255,255,255,0.16)' />
+          <rect x='655' y='260' width='140' height='14' rx='7' fill='rgba(255,255,255,0.55)' />
+          <rect x='640' y='300' width='170' height='48' rx='24' fill='rgba(255,255,255,0.12)' />
+        """
+    elif category == "Education":
+        palette = ("4c1d95", "7c3aed", "f3e8ff")
+        label = "Education Preview"
+        shape_svg = f"""
+          <rect x='610' y='120' width='220' height='250' rx='28' fill='rgba(255,255,255,0.1)' />
+          <path d='M650 205 L720 165 L790 205 L720 245 Z' fill='rgba(255,255,255,0.2)' />
+          <rect x='665' y='282' width='110' height='12' rx='6' fill='rgba(255,255,255,0.52)' />
+          <rect x='645' y='312' width='150' height='12' rx='6' fill='rgba(255,255,255,0.32)' />
+        """
+    else:
+        palette = ("1f2937", "f59e0b", "fef3c7")
+        label = "Web Preview"
+        shape_svg = f"""
+          <rect x='615' y='132' width='225' height='240' rx='28' fill='rgba(255,255,255,0.1)' />
+          <circle cx='728' cy='220' r='56' fill='rgba(255,255,255,0.16)' />
+          <rect x='658' y='310' width='140' height='12' rx='6' fill='rgba(255,255,255,0.45)' />
+        """
+
+    dark, accent, light = palette
+    svg = f"""
+    <svg xmlns='http://www.w3.org/2000/svg' width='960' height='720' viewBox='0 0 960 720'>
+      <defs>
+        <linearGradient id='bg' x1='0' y1='0' x2='1' y2='1'>
+          <stop offset='0%' stop-color='#{dark}' />
+          <stop offset='100%' stop-color='#{accent}' />
+        </linearGradient>
+      </defs>
+      <rect width='960' height='720' rx='42' fill='url(#bg)' />
+      <circle cx='770' cy='130' r='110' fill='rgba(255,255,255,0.12)' />
+      <circle cx='180' cy='590' r='150' fill='rgba(255,255,255,0.08)' />
+      <rect x='70' y='86' width='820' height='548' rx='30' fill='rgba(255,255,255,0.12)' stroke='rgba(255,255,255,0.18)' />
+      <rect x='108' y='132' width='210' height='54' rx='27' fill='#{light}' />
+      <text x='213' y='166' text-anchor='middle' font-family='Arial, sans-serif' font-size='30' font-weight='700' fill='#{accent}'>{label}</text>
+      <rect x='108' y='500' width='220' height='48' rx='24' fill='rgba(255,255,255,0.14)' />
+      <text x='218' y='531' text-anchor='middle' font-family='Arial, sans-serif' font-size='22' font-weight='700' fill='white'>{domain_label}</text>
+      <text x='108' y='286' font-family='Arial, sans-serif' font-size='54' font-weight='700' fill='white'>{title[:28]}</text>
+      <text x='108' y='344' font-family='Arial, sans-serif' font-size='54' font-weight='700' fill='white'>{query[:28]}</text>
+      <text x='108' y='438' font-family='Arial, sans-serif' font-size='26' fill='rgba(255,255,255,0.88)'>Curated fallback preview for related web sources</text>
+      {shape_svg}
+    </svg>
+    """
+    return f"data:image/svg+xml;charset=UTF-8,{quote(svg)}"
+
+
+def detect_image_fallback_category(query: str, title: str, url: str) -> str:
+    text = f"{query} {title} {url}".lower()
+
+    if any(word in text for word in ["python", "code", "developer", "programming", "github", "ai", "tech", "software"]):
+        return "Tech"
+    if any(word in text for word in ["news", "india", "ndtv", "times", "hindu", "breaking", "express", "bbc"]):
+        return "News"
+    if any(word in text for word in ["job", "career", "internship", "naukri", "hiring", "salary", "resume"]):
+        return "Jobs"
+    if any(word in text for word in ["course", "learn", "education", "university", "tutorial", "school", "academy"]):
+        return "Education"
+    return "Web"
+
+
 async def search_query(es: Elasticsearch, index: str, query: str, page: int = 1):
     
     results = []
@@ -160,6 +254,9 @@ async def search_query(es: Elasticsearch, index: str, query: str, page: int = 1)
     if not results:
         print("⚠️ No local ES results, dynamically fetching from GLOBAL WEB via API...")
         try:
+            if DDGS is None:
+                raise RuntimeError("ddgs is not installed in the active Python environment")
+
             fetch_limit = from_ + size + 10
             
             def fetch_ddg():
@@ -190,6 +287,9 @@ async def global_image_search(query: str, page: int = 1):
     size = 10
     from_ = (page - 1) * size
     try:
+        if DDGS is None:
+            raise RuntimeError("ddgs is not installed in the active Python environment")
+
         def fetch_img():
             return list(DDGS().images(query, max_results=from_ + size + 10))
         
@@ -205,12 +305,34 @@ async def global_image_search(query: str, page: int = 1):
         return results, min(len(raw_results), 100)
     except Exception as e:
         print(f"Image API Error: {e}")
-        return [], 0
+        fallback_sites = local_search(query)
+        fallback_results = []
+
+        for site in fallback_sites[from_: from_ + size]:
+            domain = ""
+            try:
+                from urllib.parse import urlparse
+                domain = urlparse(site["url"]).netloc
+            except Exception:
+                domain = ""
+            category = detect_image_fallback_category(query, site["title"], site["url"])
+
+            fallback_results.append({
+                "title": site["title"],
+                "url": curated_thumbnail_url(query, site["title"], domain, category),
+                "snippet": f"Fallback Preview | {category} | Related source: {site['url']}",
+                "score": 0.5
+            })
+
+        return fallback_results, len(fallback_sites)
 
 async def global_video_search(query: str, page: int = 1):
     size = 10
     from_ = (page - 1) * size
     try:
+        if DDGS is None:
+            raise RuntimeError("ddgs is not installed in the active Python environment")
+
         def fetch_vid():
             return list(DDGS().videos(query, max_results=from_ + size + 10))
             
