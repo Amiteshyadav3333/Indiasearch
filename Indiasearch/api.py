@@ -10,21 +10,35 @@ from dotenv import load_dotenv
 import firebase_admin
 from firebase_admin import auth, credentials
 
+import json
+
 load_dotenv()
 
 FIREBASE_PROJECT_ID = os.getenv("FIREBASE_PROJECT_ID", "indiasearch-975e1")
+FIREBASE_CREDS_JSON = os.getenv("FIREBASE_CREDENTIALS")
+FIREBASE_CREDS_FILE = os.path.join(os.path.dirname(__file__), "firebase-credentials.json")
 
 # Initialize Firebase via service account if possible, else use project ID
-FIREBASE_CREDS_PATH = os.path.join(os.path.dirname(__file__), "firebase-credentials.json")
-if os.path.exists(FIREBASE_CREDS_PATH):
-    firebase_admin.initialize_app(credentials.Certificate(FIREBASE_CREDS_PATH))
-else:
-    # Use project ID if no credentials file found
-    try:
-        if not firebase_admin._apps:
-           firebase_admin.initialize_app(options={'projectId': FIREBASE_PROJECT_ID})
-    except Exception as e:
-        print(f"Firebase initialization failed: {e}")
+if not firebase_admin._apps:
+    if FIREBASE_CREDS_JSON:
+        # Highest priority: load from environment variable (useful for Railway)
+        try:
+            creds_dict = json.loads(FIREBASE_CREDS_JSON)
+            firebase_admin.initialize_app(credentials.Certificate(creds_dict))
+            print("Firebase initialized from environment variable.")
+        except Exception as e:
+            print(f"Firebase initialization from env failing: {e}")
+    elif os.path.exists(FIREBASE_CREDS_FILE):
+        # Second priority: load from local file (useful for localhost)
+        firebase_admin.initialize_app(credentials.Certificate(FIREBASE_CREDS_FILE))
+        print("Firebase initialized from local FILE.")
+    else:
+        # Fallback to project ID (might not support all features)
+        try:
+            firebase_admin.initialize_app(options={'projectId': FIREBASE_PROJECT_ID})
+            print(f"Firebase initialized using project ID: {FIREBASE_PROJECT_ID}")
+        except Exception as e:
+            print(f"Firebase initialization using project ID failed: {e}")
 
 # === LOGGING SYSTEM ===
 logging.basicConfig(
