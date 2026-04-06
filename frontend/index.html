@@ -15,6 +15,9 @@
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <!-- Markdown Parser -->
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 
 <body>
@@ -60,21 +63,34 @@
         <div id="userPill" class="user-pill" style="display:none;" onclick="toggleUserDropdown(event)">
           <div class="user-avatar" id="userAvatar">U</div>
           <span class="dots-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+              stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="1.5" />
+              <circle cx="12" cy="5" r="1.5" />
+              <circle cx="12" cy="19" r="1.5" />
+            </svg>
           </span>
-          
+
           <div id="userDropdown" class="user-dropdown" style="display:none;">
             <div class="user-dropdown-header">
               <span id="userEmail" class="user-email-text"></span>
             </div>
             <div class="dropdown-sep"></div>
             <button class="dropdown-item" onclick="openProfileModal()">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
               My Profile & History
             </button>
             <div class="dropdown-sep"></div>
             <button class="dropdown-item danger" onclick="logoutUser()">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
+                <line x1="12" y1="2" x2="12" y2="12" />
+              </svg>
               Logout
             </button>
           </div>
@@ -89,48 +105,63 @@
       <div class="hero-logo">
         <span class="hl-india">India</span><span class="hl-search">Search</span>
       </div>
-      <p class="hero-tagline">Bharat ka AI-powered search engine 🇮🇳</p>
     </section>
 
     <!-- ═══ SEARCH SHELL ═══ -->
     <div class="search-shell" id="searchShell">
-      <div class="search-box" id="searchBox">
+      <!-- Standard Mode -->
+      <div class="search-box" id="searchBoxStandard">
         <span class="s-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-            stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
         </span>
         <input id="searchInput" type="text" placeholder="Kuch bhi search karo…" autocomplete="off" spellcheck="false">
         <div class="s-actions">
           <button onclick="toggleVoiceSearch()" id="micButton" class="icon-btn" title="Voice Search">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-              stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-              <line x1="12" y1="19" x2="12" y2="23" />
-              <line x1="8" y1="23" x2="16" y2="23" />
-            </svg>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" /></svg>
           </button>
-          <button onclick="openCameraPicker()" id="cameraButton" class="icon-btn" title="Camera Search">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-              stroke-linecap="round" stroke-linejoin="round">
-              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-              <circle cx="12" cy="13" r="4" />
-            </svg>
+          <button onclick="openCameraPicker()" id="cameraButtonStandard" class="icon-btn" title="Camera Search">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
           </button>
           <div class="s-divider"></div>
-          <button onclick="search(1, true)" class="btn-ai">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <button onclick="enterAiMode()" class="btn-ai-toggle" title="Switch to AI Mode">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
               <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
             </svg>
             Ask AI
           </button>
         </div>
-        <div id="autocompleteDropdown" class="autocomplete-dropdown"></div>
       </div>
+
+      <!-- AI Mode Box (Google Gemini Style) -->
+      <div class="ai-mode-box" id="searchBoxAi" style="display:none;">
+        <div class="ai-glow-bg"></div>
+        <div id="aiPdfPreview" class="ai-pdf-preview" style="display:none;"></div>
+        <div class="ai-input-wrap">
+          <textarea id="aiSearchInput" placeholder="Puchho jo aapke mann mein hai... (AI Mode)" rows="1" oninput="autoExpand(this)"></textarea>
+          <div class="ai-actions">
+             <button onclick="openPdfPicker()" class="ai-mini-btn" title="PDF Analysis">
+               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+             </button>
+             <button onclick="openCameraPicker()" class="ai-mini-btn" title="Visual Recognition">
+               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+             </button>
+             <button class="ai-mini-btn" onclick="exitAiMode()" title="Return to Search Engine">
+               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                 <line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline>
+               </svg>
+             </button>
+             <button onclick="searchAI()" class="ai-send-btn">
+               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="9 18 15 12 9 6"></polyline></svg>
+             </button>
+          </div>
+        </div>
+      </div>
+
+      <div id="autocompleteDropdown" class="autocomplete-dropdown"></div>
       <input id="cameraInput" type="file" accept="image/*" capture="environment" hidden>
+      <input id="pdfInput" type="file" accept="application/pdf" hidden>
       <p id="scanStatus" class="scan-status"></p>
     </div>
 
@@ -161,11 +192,20 @@
         Images
       </button>
       <button class="filter-pill" onclick="setFilter('videos')">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <polygon points="23 7 16 12 23 17 23 7" />
-          <rect x="1" y="5" width="15" height="14" rx="2" />
-        </svg>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="23 7 16 12 23 17 23 7" /><rect x="1" y="5" width="15" height="14" rx="2" /></svg>
         Videos
+      </button>
+      <button class="filter-pill" onclick="setFilter('weather')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17.5 19a3.5 3.5 0 1 1 0-7c.1 0 .2 0 .3 0a5 5 0 1 1 9.2 2" /><path d="M12 18V22" /><path d="M8 22L12 18L16 22" /></svg>
+        Weather
+      </button>
+      <button class="filter-pill" onclick="setFilter('score')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+        Live Score
+      </button>
+      <button class="filter-pill ai-tab" onclick="enterAiMode()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        Ask AI
       </button>
     </div>
 

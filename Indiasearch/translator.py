@@ -12,11 +12,17 @@ if USE_OPENAI:
 # ----------- BASIC LANGUAGE DETECT --------------
 
 def detect_language(text):
-    """Very simple language detector"""
-
+    """Simple language detector for Hindi (Devanagari) and Hinglish"""
+    
+    # Check for Devanagari
     hindi_chars = re.findall(r"[\u0900-\u097F]", text)
-
     if len(hindi_chars) > 0:
+        return "hi"
+        
+    # Check for Hinglish keywords
+    hinglish_keywords = ["kya", "hai", "hain", "kaha", "kab", "kyu", "kaise", "kon", "kis", "ka", "ki", "ko", "se", "me", "per", "raha", "rahi", "hoga", "tha", "thi", "the"]
+    words = text.lower().split()
+    if any(w in hinglish_keywords for w in words):
         return "hi"
 
     return "en"

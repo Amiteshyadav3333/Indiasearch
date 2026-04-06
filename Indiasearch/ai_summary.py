@@ -2,13 +2,13 @@ import os
 import re
 from textwrap import shorten
 
-# ========= OPTIONAL OPENAI =========
-USE_OPENAI = False   # change later when you add key
+from groq import Groq
 
-if USE_OPENAI:
-    from openai import OpenAI
-    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
+# ========= GROQ CONFIG =========
+GROQ_API_KEY = os.getenv("Grok_api_key") # Re-using user's key name
+client = None
+if GROQ_API_KEY:
+    client = Groq(api_key=GROQ_API_KEY)
 
 # ============ CLEANER ==============
 
@@ -46,56 +46,105 @@ def local_summarize(query, docs):
     return f"Based on search results: {summary_text}... See detailed results below."
 
 
-# ========= OPENAI MODE =============
+# ========= GROQ MODE =============
 
-def openai_summary(query, docs, strict=False):
+def groq_vision_identify(b64_image):
+    if not client:
+        return None
+    try:
+        completion = client.chat.completions.create(
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Identify this person or object. If it is a person, provide THEIR FULL NAME and official search keywords for findings their social media (Instagram, Facebook, X/Twitter). If it is a famous person, give their name. If not, describe the person so I can search for them. Output ONLY the identification string."},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{b64_image}",
+                            },
+                        },
+                    ],
+                }
+            ],
+            model="llama-3.2-11b-vision-preview",
+        )
+        return completion.choices[0].message.content
+    except Exception as e:
+        print(f"Groq Vision Error: {e}")
+        return None
 
-    content = ""
+def groq_chat(query, docs, lang="English", pdf_content=None):
+    if not client:
+        return None
 
-    for d in docs[:6]:
-        content += f"\nTITLE: {d.get('title')}\nTEXT: {d.get('content')}\n"
+    # Combine context
+    context = ""
+    if docs:
+        for d in docs[:8]:
+            context += f"\nTITLE: {d.get('title')}\nURL: {d.get('url')}\nTEXT: {d.get('content') or d.get('snippet')}\n"
 
-    strictness = "Answer directly and concisely in 1-2 lines. Example: 'There are exactly 22 scheduled languages in India.' Do not add any extra info. No conversational fluff." if strict else "Use short, clear bullet points. Avoid fake or unverified claims. Then end with: 'Results below 👇'"
+    # PDF Context (Absolute Priority)
+    pdf_info = f"\n--- CORE DOCUMENT CONTENT (SOURCE OF TRUTH) ---\n{pdf_content}\n" if pdf_content else ""
 
+    # User's language and length instructions
     prompt = f"""
-You are Google AI Overview assistant.
-Summarize the key answer exactly for the user query:
+        User Query: {query}
+        User Language: {lang}
+        
+        {pdf_info}
+        
+        STRICT INSTRUCTIONS FOR AI:
+        1. IF A DOCUMENT (CORE DOCUMENT CONTENT) IS PROVIDED ABOVE, USE IT AS YOUR PRIMARY AND ONLY SOURCE.
+        2. IF NO DOCUMENT IS PROVIDED, USE THE 'General Search Context' PROVIDED BELOW IF AVAILABLE.
+        3. IF BOTH DOCUMENT AND SEARCH CONTEXT ARE MISSING, USE YOUR OWN INTERNAL DATABASE AND KNOWLEDGE TO ANSWER.
+        4. FOR GENERAL QUERIES (e.g., 'What is India?'), PROVIDE A COMPREHENSIVE AND PROFESSIONAL ANSWER OF 4 TO 5 LINES.
+        5. IF THE USER ASKS A RECURSIVE OR SIMPLE ENTITY QUESTION (e.g., 'What is its name?'), BE EXTREMELY BRIEF (ONLY THE NAME).
+        6. NO META-TALK like 'Certainly' or 'I hope this helps'. Start directly with the answer.
+        7. Respond in {lang}.
+        
+        General Search Context:
+        {context}
+    """
 
-Query: {query}
-
-{strictness}
-
-Content:
-{content}
-"""
-
-    response = client.chat.completions.create(
-        model="gpt-4.1-mini",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.4,
-    )
-
-    return response.choices[0].message.content
-
+    try:
+        chat_completion = client.chat.completions.create(
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are IndiaSearch Precise Engine. You provide sharp, high-fidelity answers. For general overview questions, you give 4-5 lines of informative text. For specific entity requests, you give only the entity name."
+                },
+                {
+                    "role": "user",
+                    "content": prompt,
+                }
+            ],
+            model="llama-3.3-70b-versatile",
+            temperature=0.3, # Slightly higher for better narrative flow in 4-5 lines
+        )
+        return chat_completion.choices[0].message.content
+    except Exception as e:
+        print(f"Groq API Error: {e}")
+        return None
 
 # ===== MAIN FUNCTION TO CALL =======
 
-def generate_ai_summary(query, docs, strict=False):
+def generate_ai_summary(query, docs, ai_mode=False, lang="English", pdf_content=None):
     """
     query: user search string
-    docs: list of elasticsearch docs
+    docs: list of search results
+    ai_mode: if true, provide the advanced chat experience
     """
 
-    if not docs:
+    if not docs and not ai_mode and not pdf_content:
         return None
 
     try:
-        if USE_OPENAI:
-            return openai_summary(query, docs, strict)
-
+        if client:
+            return groq_chat(query, docs, lang, pdf_content)
         else:
             return local_summarize(query, docs)
 
     except Exception as e:
         print("AI Summary Error:", e)
-        return None
+        return local_summarize(query, docs)

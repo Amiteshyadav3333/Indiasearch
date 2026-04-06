@@ -18,6 +18,60 @@ const scanStatus = document.getElementById("scanStatus");
 const authModal = document.getElementById("authModal");
 const authMessage = document.getElementById("authMessage");
 const authButton = document.getElementById("authButton");
+
+const aiSearchInput = document.getElementById("aiSearchInput");
+const searchBoxStandard = document.getElementById("searchBoxStandard");
+const searchBoxAi = document.getElementById("searchBoxAi");
+const aiPdfPreview = document.getElementById("aiPdfPreview");
+const mainWrap = document.querySelector(".main-wrap");
+
+/** ── AI Mode Manager ── **/
+function enterAiMode() {
+    if (searchBoxStandard) searchBoxStandard.style.display = "none";
+    if (searchBoxAi) {
+        searchBoxAi.style.display = "flex";
+        if (mainWrap) mainWrap.classList.add("ai-active");
+        if (aiSearchInput) {
+            aiSearchInput.focus();
+            if (searchInput.value) aiSearchInput.value = searchInput.value;
+        }
+    }
+}
+
+function exitAiMode() {
+    if (searchBoxStandard) searchBoxStandard.style.display = "flex";
+    if (searchBoxAi) {
+        searchBoxAi.style.display = "none";
+        if (mainWrap) mainWrap.classList.remove("ai-active");
+    }
+    if (searchInput) searchInput.focus();
+}
+
+function autoExpand(t) {
+    t.style.height = 'auto';
+    t.style.height = (t.scrollHeight) + 'px';
+}
+
+function searchAI() {
+    if (!aiSearchInput || !aiSearchInput.value.trim()) return;
+    searchInput.value = aiSearchInput.value;
+    
+    // Clear and reset AI input immediately for next question
+    aiSearchInput.value = "";
+    aiSearchInput.style.height = "auto";
+    aiSearchInput.focus();
+    
+    search(1, true); // Trigger AI Mode search
+}
+
+if (aiSearchInput) {
+    aiSearchInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            searchAI();
+        }
+    });
+}
 const userPill = document.getElementById("userPill");
 const userEmail = document.getElementById("userEmail");
 const userAvatar = document.getElementById("userAvatar");
@@ -226,12 +280,125 @@ function toggleVoiceSearch() {
 // ── Camera ──
 function openCameraPicker() { if (cameraInput) cameraInput.click(); }
 if (cameraInput) {
-  cameraInput.addEventListener("change", () => {
+  cameraInput.addEventListener("change", async () => {
     const f = cameraInput.files?.[0];
     if (!f) return;
+    
     attachedScan = f;
-    searchInput.value = `Inspect project from image: ${f.name}`;
-    if (scanStatus) scanStatus.textContent = `📎 Image attached: ${f.name}`;
+    if (scanStatus) scanStatus.innerHTML = `⏳ Analyzing Image: <b>${f.name}</b>...`;
+
+    // 1. Try QR/Barcode Scan locally first
+    try {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const ctx = canvas.getContext("2d");
+          canvas.width = img.width;
+          canvas.height = img.height;
+          ctx.drawImage(img, 0, 0);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(imageData.data, imageData.width, imageData.height);
+          
+          if (code) {
+            if (scanStatus) scanStatus.innerHTML = `✅ <b>SCAN RESULT:</b> <a href="${code.data}" target="_blank" style="color:var(--neon-glow)">${code.data}</a>`;
+            searchInput.value = code.data;
+          } else {
+            // 2. If no QR, trigger Advanced Visual Search via backend
+            triggerVisualSearch(f);
+          }
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(f);
+    } catch (err) {
+      console.error("Local scan error:", err);
+      triggerVisualSearch(f);
+    }
+  });
+}
+
+/** ── Triggering Advanced AI Visual Recognition ── **/
+async function triggerVisualSearch(file) {
+  if (scanStatus) scanStatus.innerHTML = `🔍 Advanced Scan: Searching "Whole Internet" for ${file.name}...`;
+  
+  const formData = new FormData();
+  formData.append("file", file);
+  if (authState.sessionToken) formData.append("session_token", authState.sessionToken);
+
+  try {
+    const res = await fetch(`${activeApiBase}/visual-search`, {
+      method: "POST",
+      body: formData
+    });
+    const data = await res.json();
+    if (res.ok) {
+      if (scanStatus) scanStatus.innerHTML = `✨ <b>Recognition Complete:</b> ${data.identity || "Possible matches found below."}`;
+      // Put recognition result in search bar and trigger AI Mode with social keywords
+      const identityQuery = data.identity || `Search for details about ${file.name}`;
+      searchInput.value = `${identityQuery} official social media links instagram facebook twitter x`;
+      search(1, true); // Automatic Ask AI trigger
+    } else {
+      throw new Error(data.error || "Recognition failed");
+    }
+  } catch (e) {
+    if (scanStatus) scanStatus.textContent = `❌ Recognition Error: ${e.message}`;
+  }
+}
+
+// ── PDF Upload ──
+const pdfInput = document.getElementById("pdfInput");
+function openPdfPicker() { if (pdfInput) pdfInput.click(); }
+if (pdfInput) {
+  pdfInput.addEventListener("change", async () => {
+    const f = pdfInput.files?.[0];
+    if (!f) return;
+    
+    if (scanStatus) scanStatus.textContent = `⏳ Processing PDF: ${f.name}...`;
+    
+    const formData = new FormData();
+    formData.append("file", f);
+    if (authState.sessionToken) formData.append("session_token", authState.sessionToken);
+
+    try {
+      const res = await fetch(`${activeApiBase}/upload-pdf`, {
+        method: "POST",
+        body: formData
+      });
+      const data = await res.json();
+      if (res.ok) {
+        // If in AI mode, show in AI box. Otherwise show standard scanStatus.
+        const activeAi = document.getElementById("searchBoxAi").style.display === "flex";
+        
+        const pillHtml = `
+            <div class="pdf-status-pill">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16m16-4V8l-6-6"/></svg>
+                <span>${f.name} (Ready)</span>
+            </div>
+        `;
+
+        if (activeAi && aiPdfPreview) {
+            aiPdfPreview.innerHTML = pillHtml;
+            aiPdfPreview.style.display = "inline-flex";
+            if (scanStatus) scanStatus.textContent = "";
+        } else if (scanStatus) {
+            scanStatus.innerHTML = pillHtml;
+        }
+
+        searchInput.value = ""; 
+        if (aiSearchInput) {
+            aiSearchInput.placeholder = "PDF Analysis active. Ask anything...";
+            aiSearchInput.focus();
+        }
+        searchInput.placeholder = "Puchho iss PDF ke baare mein...";
+        searchInput.focus();
+      } else {
+        throw new Error(data.error || "Upload failed");
+      }
+    } catch (e) {
+      if (scanStatus) scanStatus.textContent = `❌ Error: ${e.message}`;
+    }
   });
 }
 
@@ -303,6 +470,7 @@ async function search(pageNumber = 1, aiMode = false) {
   aiSummaryBox.innerHTML = "";
 
   try {
+    document.documentElement.setAttribute("data-ai-mode", aiMode ? "true" : "false");
     const params = new URLSearchParams({ q: query, page: String(pageNumber), filter: currentFilter, ai_mode: String(aiMode) });
     if (authState.sessionToken) params.set("session_token", authState.sessionToken);
 
@@ -328,29 +496,65 @@ async function search(pageNumber = 1, aiMode = false) {
       return;
     }
 
+    // ── Weather Card Integration ──
+    let weatherHtml = "";
+    if (data.weather_data && pageNumber === 1) {
+      const w = data.weather_data;
+      const wLabel = await translateText("Weather in", targetLang);
+      const feeLabel = await translateText("Feels like", targetLang);
+      const humLabel = await translateText("Humidity", targetLang);
+      const windLabel = await translateText("Wind", targetLang);
+      
+      weatherHtml = `
+        <div class="weather-card animate-slide-up">
+            <div class="weather-main">
+                <div class="weather-info">
+                    <h3 class="weather-city">${w.city}, ${w.country}</h3>
+                    <p class="weather-label">${wLabel}</p>
+                    <div class="weather-temp">${w.temp}°C</div>
+                    <p class="weather-desc">${w.desc}</p>
+                </div>
+                <div class="weather-visual">
+                    <img src="https://openweathermap.org/img/wn/${w.icon}@4x.png" alt="Weather Icon">
+                </div>
+            </div>
+            <div class="weather-details">
+                <div class="w-det-item"><span>${feeLabel}</span><strong>${w.feels_like}°C</strong></div>
+                <div class="w-det-item"><span>${humLabel}</span><strong>${w.humidity}%</strong></div>
+                <div class="w-det-item"><span>${windLabel}</span><strong>${w.wind} m/s</strong></div>
+            </div>
+        </div>
+      `;
+    }
+
     // ── AI Summary / Overview ──
     let summaryHtml = "";
+    let shouldAnimate = false;
+    let rawText = "";
+
     if (data.summary && pageNumber === 1) {
-      const ts = await translateText(data.summary, targetLang);
+      rawText = data.summary;
       if (aiMode) {
+        shouldAnimate = true;
         summaryHtml = `
           <div class="ai-overview-card">
             <div class="ai-overview-header">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-              AI Overview
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              <span>Ask AI</span>
             </div>
-            <div class="ai-overview-text">${ts.replace(/\n/g, "<br>")}</div>
+            <div class="ai-overview-text" id="streamingAI"></div>
+            <div class="ai-source-strip" id="aiSources"></div>
           </div>`;
       } else {
         summaryHtml = `
           <div class="summary-card">
             <div class="summary-label">✨ AI Summary</div>
-            <div class="summary-text">${ts}</div>
+            <div class="summary-text">${rawText}</div>
           </div>`;
       }
     }
 
-    // ── Knowledge Panel ──
+    // ── Pre-render Smart Panels (Weather, AI Summary, Wikipedia) ──
     let wikiHtml = "";
     if (!aiMode && data.knowledge_panel && pageNumber === 1 && currentFilter === "all") {
       const kp = data.knowledge_panel;
@@ -371,21 +575,58 @@ async function search(pageNumber = 1, aiMode = false) {
         </div>`;
     }
 
+    // Set AI Summary and AI Link Section
     aiSummaryBox.innerHTML = summaryHtml + wikiHtml;
+
+    // Trigger Animation if needed
+    if (shouldAnimate) {
+      const target = document.getElementById("streamingAI");
+      if (target) {
+        let i = 0;
+        const speed = 15; // ms
+        function typeWriter() {
+           if (i < rawText.length) {
+              const char = rawText.charAt(i);
+              target.innerHTML += char === "\n" ? "<br>" : char;
+              i++;
+              setTimeout(typeWriter, speed);
+              if (mainWrap) mainWrap.scrollTop = mainWrap.scrollHeight;
+           }
+        }
+        typeWriter();
+      }
+    }
+
+    // ── Weather Panel (Smart Answer) ──
+    if (data.weather) {
+      aiSummaryBox.innerHTML = renderWeatherPanel(data.weather) + aiSummaryBox.innerHTML;
+    }
+
+    if (data.sports) {
+      aiSummaryBox.innerHTML = renderSportsPanel(data.sports) + aiSummaryBox.innerHTML;
+    }
+
+    if (data.stocks) {
+      aiSummaryBox.innerHTML = renderStockPanel(data.stocks) + aiSummaryBox.innerHTML;
+    }
 
     if (currentFilter === "images" && data.warning) {
       const tw = await translateText(data.warning, targetLang);
       aiSummaryBox.innerHTML = `<div class="image-warning-bar">${tw}</div>` + aiSummaryBox.innerHTML;
     }
 
-    resultsBox.innerHTML = "";
+    // If NO results at all (no web results AND no weather/summary/sports/stocks)
+    const hasResults = (data.results && data.results.length > 0);
+    const hasSmartAnswer = (data.weather || data.summary || data.knowledge_panel || data.sports || data.stocks);
 
-    if (!data.results || data.results.length === 0) {
+    if (!hasResults && !hasSmartAnswer) {
       const noRes = await translateText("No results found", targetLang);
       resultsBox.innerHTML = `<div class="state-empty"><span class="state-empty-icon">🔍</span>${noRes}</div>`;
       if (paginationContainer) paginationContainer.innerHTML = "";
       return;
     }
+
+    resultsBox.innerHTML = ""; // Clear results but keep header (aiSummaryBox)
 
     // ── Inline Article Reader ──
     window.readArticle = async function (e, url, index) {
@@ -418,18 +659,27 @@ async function search(pageNumber = 1, aiMode = false) {
         translateText("Visit Website", targetLang)
       ]);
 
-      const isNews = currentFilter === "news";
+      const isNews = (currentFilter === "news") || (data.is_news_routing === true);
       const isImages = currentFilter === "images";
       let host = item.url;
       try { host = new URL(item.url).hostname.replace(/^www\./, ""); } catch { }
 
       if (aiMode) {
-        return `
+        // Render Source Badges for AI
+        const sourceHtml = `
           <div class="ai-link-item">
-            <span class="ai-source-badge">${getSourceBadge(item.url)}</span>
+            <span class="host-name">${host}</span>
             <a href="${item.url}" target="_blank" class="ai-link-title">${tt}</a>
-            <div class="ai-link-url">${host}</div>
           </div>`;
+        
+        // Append to source strip if on page 1
+        if (pageNumber === 1) {
+             const strip = document.getElementById("aiSources");
+             if (strip) strip.innerHTML += sourceHtml;
+        }
+        return ""; // Don't return regular results in full AI mode?
+        // Actually, user said chat mode, so we hide normal results or show them below.
+        // Let's show only top 3 as small references.
       }
 
       if (isImages) {
@@ -448,8 +698,11 @@ async function search(pageNumber = 1, aiMode = false) {
           </div>`;
       }
 
+      const newsImageHtml = (isNews && item.image) ? `<img src="${item.image}" class="news-snapshot" alt="news" onerror="this.style.display='none'">` : '';
+
       return `
         <div class="result-item">
+          ${newsImageHtml}
           <div class="result-site-line">
             <div class="result-favicon">🌐</div>
             <span class="result-host">${host}</span>
@@ -865,6 +1118,144 @@ async function logoutUser() {
 }
 
 // ═══════════════════════════════════════════
+// HOME WIDGETS
+// ═══════════════════════════════════════════
+function setSearchFocus(q) {
+  const input = document.getElementById("searchInput");
+  if (input) {
+    input.value = q;
+    input.focus();
+  }
+}
+
+async function initHomeWidgets() {
+  // Logic removed as per user request to use real-time search intent instead.
+}
+
+function renderWeatherPanel(w) {
+  return `
+    <div class="weather-card animate-slide-up">
+        <div class="weather-main">
+            <div class="weather-info">
+                <h3 class="weather-city">${w.city}, ${w.country}</h3>
+                <p class="weather-label">Localized Climate Report</p>
+                <div class="weather-temp">${w.temp}°C</div>
+                <p class="weather-desc">${w.desc}</p>
+            </div>
+            <div class="weather-visual">
+                <img src="https://openweathermap.org/img/wn/${w.icon}@4x.png" alt="Weather">
+            </div>
+        </div>
+        <div class="weather-details">
+            <div class="w-det-item"><span>Feels like</span><strong>${w.feels_like}°C</strong></div>
+            <div class="w-det-item"><span>Humidity</span><strong>${w.humidity}%</strong></div>
+            <div class="w-det-item"><span>Wind</span><strong>${w.wind} m/s</strong></div>
+        </div>
+    </div>
+  `;
+}
+
+function renderSportsPanel(matches) {
+  if (!matches || matches.length === 0) return "";
+  
+  const matchHtml = matches.map(m => {
+    const teamParts = m.name.split(" vs ");
+    const teamA = teamParts[0] || "T1";
+    const teamB = teamParts[1] || "T2";
+    
+    const s = m.score || { r: 0, w: 0, o: 0, inning: "Live" };
+    const liveScore = `${s.r}/${s.w}`;
+    const details = `${s.o} overs • ${s.inning}`;
+    
+    // Date & Updated Timestamp for Trust
+    const matchDate = m.date || "Today";
+    const syncTime = m.updated_at || "Just now";
+    
+    return `
+      <div class="score-card elite-card animate-slide-up">
+          <div class="sc-trust-bar">
+              <span class="sc-date">📅 ${matchDate}</span>
+              <span class="sc-sync-badge">✅ Verified Sync: ${syncTime}</span>
+          </div>
+
+          <div class="sc-header" style="margin-top:10px;">
+              <span class="sc-badge ipl-badge">${m.matchType || 'LIVE'}</span>
+              <span class="sc-live-dot"></span>
+              <span class="sc-status">${m.status}</span>
+          </div>
+          
+          <div class="sc-teams flex-row">
+              <div class="sc-team-side">
+                  <div class="team-initials">${teamA.charAt(0)}</div>
+                  <span class="sc-team-name">${teamA.split(',')[0]}</span>
+              </div>
+              <div class="sc-vs-circle">VS</div>
+              <div class="sc-team-side">
+                  <div class="team-initials secondary">${teamB.charAt(0)}</div>
+                  <span class="sc-team-name">${teamB.split(',')[0]}</span>
+              </div>
+          </div>
+          
+          <div class="sc-main-details">
+              <div class="sc-score-big">${liveScore}</div>
+              <div class="sc-overs-small">${details}</div>
+          </div>
+          
+          <div class="sc-player-stats">
+              <div class="player-stat">
+                  <span class="ps-label">🏏 Striker</span>
+                  <span class="ps-val highlighted">${m.striker || '---'}</span>
+              </div>
+              <div class="player-stat">
+                  <span class="ps-label">Non-Stk</span>
+                  <span class="ps-val">${m.non_striker || '---'}</span>
+              </div>
+              <div class="player-stat">
+                  <span class="ps-label">🎳 Bowler</span>
+                  <span class="ps-val highlighted">${m.bowler || '---'}</span>
+              </div>
+          </div>
+          
+          <div class="sc-footer-venue">🏟️ ${m.venue}</div>
+      </div>
+    `;
+  }).join("");
+
+  return `
+    <div class="sports-section">
+      <div class="section-label">⚡ Real-Time Live Scoreboard</div>
+      <div class="score-grid-elite">${matchHtml}</div>
+    </div>
+  `;
+}
+
+function renderStockPanel(s) {
+  if (!s) return "";
+  const isUp = parseFloat(s.change) >= 0;
+  const colorClass = isUp ? "stock-up" : "stock-down";
+  const arrow = isUp ? "▲" : "▼";
+
+  return `
+    <div class="finance-panel">
+      <div class="fin-header">📈 Market Summary</div>
+      <div class="fin-content">
+        <div class="fin-symbol">${s.symbol}</div>
+        <div class="fin-main">
+          <div class="fin-price">${parseFloat(s.price).toFixed(2)}</div>
+          <div class="fin-delta ${colorClass}">${arrow} ${parseFloat(s.change).toFixed(2)} (${s.change_percent})</div>
+        </div>
+        <div class="fin-extra">
+          <div class="fin-item"><span>High</span> ${parseFloat(s.high).toFixed(2)}</div>
+          <div class="fin-item"><span>Low</span> ${parseFloat(s.low).toFixed(2)}</div>
+          <div class="fin-item"><span>Vol</span> ${parseInt(s.volume || 0).toLocaleString()}</div>
+        </div>
+        <div class="fin-footer">As of ${s.last_trading_day} (Real-time data)</div>
+      </div>
+    </div>
+  `;
+}
+
+// ═══════════════════════════════════════════
 // DOM READY
 // ═══════════════════════════════════════════
 document.addEventListener("DOMContentLoaded", () => {
@@ -872,4 +1263,5 @@ document.addEventListener("DOMContentLoaded", () => {
   renderTrending();
   renderAuthState();
   hydrateSession();
+  initHomeWidgets();
 });
