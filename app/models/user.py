@@ -8,7 +8,7 @@ from typing import Optional
 
 import psycopg2
 import psycopg2.extras
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote
 
 # ─── PostgreSQL Connection ─────────────────────────────────────────────────────
 # Set DATABASE_URL in your .env file
@@ -24,59 +24,61 @@ def get_conn():
     """
     Return a new PostgreSQL connection.
     Uses DATABASE_URL env var (Railway / Supabase / Neon / local).
-    psycopg2.extras.RealDictCursor → returns rows as dicts (same as sqlite3.Row).
     """
     if not DATABASE_URL:
-        raise RuntimeError(
-            "DATABASE_URL is not set. "
-            "Add it to your .env file:\n"
-            "DATABASE_URL=postgresql://user:password@host:5432/dbname"
-        )
+        raise RuntimeError("DATABASE_URL is not set.")
     
-    # Manual robust parsing to handle passwords with '@'
+    # Try 1: Direct connection as DSN (psycopg2 handles some encoding)
     try:
-        # Expected format: postgresql://username:password@hostname:port/database
-        if not DATABASE_URL.startswith("postgresql://"):
+        if "%" not in DATABASE_URL: # If not encoded, literal might fail in DSN if @ is present
+             pass # Skip to manual parse if literal @ exists
+        else:
              return psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+    except:
+        pass
 
-        # Remove prefix
-        url = DATABASE_URL[len("postgresql://"):]
+    # Try 2: Manual robust parsing for Supabase/Railway-style URLs
+    try:
+        url_to_parse = DATABASE_URL
+        if url_to_parse.startswith("postgresql://"):
+            url_to_parse = url_to_parse[len("postgresql://"):]
         
-        # Split at the LAST '@' which separates credentials from the host
-        if '@' in url:
-            creds, rest = url.rsplit('@', 1)
+        # Split at the LAST '@' for host vs credentials
+        if '@' in url_to_parse:
+            creds, rest = url_to_parse.rsplit('@', 1)
             
-            # Parse credentials
+            # Username/Password
             if ':' in creds:
                 username, password = creds.split(':', 1)
             else:
                 username, password = creds, None
             
-            # Parse host and database
+            # Host/DB
             if '/' in rest:
                 host_port, database = rest.split('/', 1)
             else:
-                host_port, database = rest, ""
+                host_port, database = rest, "postgres"
             
-            # Parse host and port
+            # Host/Port
             if ':' in host_port:
-                hostname, port = host_port.split(':', 1)
+                host, port = host_port.split(':', 1)
             else:
-                hostname, port = host_port, "5432"
-            
+                host, port = host_port, "5432"
+
+            # UNQUOTE both to handle %40, %23 etc
             return psycopg2.connect(
-                database=database,
-                user=username,
-                password=password,
-                host=hostname,
+                database=unquote(database),
+                user=unquote(username),
+                password=unquote(password) if password else None,
+                host=host,
                 port=port,
-                cursor_factory=psycopg2.extras.RealDictCursor
+                cursor_factory=psycopg2.extras.RealDictCursor,
+                connect_timeout=10 # Avoid long hangs
             )
     except Exception as e:
         print(f"DATABASE PARSING ERROR: {e}")
-        # Final fallback
-        return psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
         
+    # Final Fallback: Just let psycopg2 try its best
     return psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
 
 
