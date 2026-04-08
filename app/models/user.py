@@ -28,9 +28,12 @@ def get_conn():
     if not DATABASE_URL:
         raise RuntimeError("DATABASE_URL is not set.")
     
+    # Sanitize DATABASE_URL (remove quotes/whitespace that might come from Render env UI)
+    dsn = DATABASE_URL.strip().strip('"').strip("'")
+    
     # Try parsing manually first to handle @ in passwords
     try:
-        url = DATABASE_URL
+        url = dsn
         if url.startswith("postgresql://"):
             url = url[len("postgresql://"):]
         
@@ -60,7 +63,7 @@ def get_conn():
         print(f"DATABASE PARSING ERROR: {e}")
         
     # Fallback to direct DSN
-    return psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+    return psycopg2.connect(dsn, cursor_factory=psycopg2.extras.RealDictCursor)
 
 
 def init_db():
