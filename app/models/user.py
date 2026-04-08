@@ -22,48 +22,38 @@ SESSION_TTL_SECONDS = 60 * 60 * 24 * 14  # 14 days
 
 def get_conn():
     """
-    Return a new PostgreSQL connection.
-    Safe parameter parsing for special characters.
+    Highly robust PostgreSQL connection logic using regex to handle 
+    passwords with special characters (@, #) correctly.
     """
     if not DATABASE_URL:
         raise RuntimeError("DATABASE_URL is not set.")
     
-    # Sanitize DATABASE_URL (remove quotes/whitespace that might come from Render env UI)
-    dsn = DATABASE_URL.strip().strip('"').strip("'")
+    clean_url = DATABASE_URL.strip().strip('"').strip("'")
     
-    # Try parsing manually first to handle @ in passwords
-    try:
-        url = dsn
-        if url.startswith("postgresql://"):
-            url = url[len("postgresql://"):]
-        
-        if '@' in url:
-            creds, rest = url.rsplit('@', 1)
-            username, password = creds.split(':', 1) if ':' in creds else (creds, None)
-            host_port, database = rest.split('/', 1) if '/' in rest else (rest, "postgres")
-            host, port = host_port.split(':', 1) if ':' in host_port else (host_port, "5432")
-
-            u_name = unquote(username)
-            u_pass = unquote(password) if password else None
-            u_db = unquote(database)
-            
-            # Detailed logging (Masked)
-            print(f"Connecting to DB: host={host}, port={port}, user={u_name}, db={u_db}")
-            
+    # Regex to capture: postgresql://[user]:[pass]@[host]:[port]/[db]
+    # This captures everything between : and @ as the password, handles multiple @
+    import re
+    pattern = r"postgresql://([^:]+):(.+)@([^:/]+):?(\d*)?/(.+)"
+    match = re.match(pattern, clean_url)
+    
+    if match:
+        user, password, host, port, db = match.groups()
+        try:
             return psycopg2.connect(
-                database=u_db,
-                user=u_name,
-                password=u_pass,
+                database=unquote(db),
+                user=unquote(user),
+                password=unquote(password),
                 host=host,
-                port=port,
+                port=port or "5432",
+                sslmode="require",
                 cursor_factory=psycopg2.extras.RealDictCursor,
                 connect_timeout=10
             )
-    except Exception as e:
-        print(f"DATABASE PARSING ERROR: {e}")
-        
-    # Fallback to direct DSN
-    return psycopg2.connect(dsn, cursor_factory=psycopg2.extras.RealDictCursor)
+        except Exception as e:
+            print(f"DB CONNECTION ERROR (Parsed): {e}")
+
+    # Fallback to direct connection if regex doesn't match or fails
+    return psycopg2.connect(clean_url, cursor_factory=psycopg2.extras.RealDictCursor)
 
 
 def init_db():
