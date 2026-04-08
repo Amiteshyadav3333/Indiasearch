@@ -71,3 +71,46 @@ async def search(query: str, max_results: int = 10) -> list:
     return await loop.run_in_executor(
         _executor, _yahoo_sync_search, query, max_results
     )
+
+def _yahoo_sync_images(query: str, max_results: int = 20) -> list:
+    """Blocking Yahoo Image search via requests + BeautifulSoup."""
+    try:
+        import requests
+        from bs4 import BeautifulSoup
+
+        url = f"https://images.search.yahoo.com/search/images?p={query}"
+        headers = random.choice(_HEADERS_POOL)
+        resp = requests.get(url, headers=headers, timeout=5)
+        soup = BeautifulSoup(resp.text, "html.parser")
+
+        results = []
+        for tag in soup.select("li.ld a"):
+            img = tag.select_one("img")
+            if not img:
+                continue
+            
+            src = img.get("data-src") or img.get("src")
+            if not src or src.startswith("data:"):
+                continue
+                
+            results.append({
+                "title": img.get("alt", "") or tag.get("aria-label", "Image"),
+                "url": src,
+                "snippet": "Yahoo Images",
+                "source": "yahoo_images"
+            })
+            if len(results) >= max_results:
+                break
+                
+        logger.info(f"[Yahoo Images] Got {len(results)} results for: {query!r}")
+        return results
+    except Exception as e:
+        logger.error(f"[Yahoo Images] Image Search failed: {e}")
+        return []
+
+async def search_images(query: str, max_results: int = 20) -> list:
+    """Async Yahoo Image search."""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(
+        _executor, _yahoo_sync_images, query, max_results
+    )

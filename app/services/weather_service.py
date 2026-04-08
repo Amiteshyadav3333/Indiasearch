@@ -1,30 +1,42 @@
 # app/services/weather_service.py
-# 🌦️ Weather Service — Weather Business Logic
-# ----------------------------------------
-# Responsibilities:
-#   - Fetch current weather and forecast from OpenWeatherMap
-#   - Cache results in Redis (TTL: 10 min)
-#   - Format response for frontend display
-#
-# Depends on:
-#   app/integrations/weather_client.py  → OpenWeatherMap API
-#   app/cache/cache_manager.py          → Redis
+import os
+import aiohttp
+import logging
 
+logger = logging.getLogger(__name__)
 
-class WeatherService:
-    """Handles weather data fetching and caching."""
+async def fetch_weather(query: str) -> dict:
+    """
+    Fetches real-time weather data.
+    """
+    api_key = os.getenv("whether_API_KEY")
+    if not api_key:
+        return None
+        
+    # Extract city name from query (e.g., "weather in Delhi" -> "Delhi")
+    city = query.replace("weather", "").replace("in", "").strip()
+    if not city:
+        city = "Delhi" # default
 
-    @staticmethod
-    def get_current(city: str = None, lat: float = None, lon: float = None) -> dict:
-        """Get current weather by city name or coordinates."""
-        # TODO: Check Redis cache (key: weather:current:{city})
-        # TODO: Call WeatherClient.get_current(...)
-        # TODO: Cache and return result
-        raise NotImplementedError("Migrate weather logic from api.py")
-
-    @staticmethod
-    def get_forecast(city: str) -> list:
-        """Get 5-day weather forecast."""
-        # TODO: Check Redis cache (key: weather:forecast:{city})
-        # TODO: Call WeatherClient.get_forecast(city)
-        raise NotImplementedError
+    try:
+        clean_key = api_key.strip().strip('"')
+        url = f"https://api.openweathermap.org/data/2.5/weather?q={city}&appid={clean_key}&units=metric"
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=10) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    return {
+                        "type": "weather",
+                        "city": data.get("name"),
+                        "temp": round(data["main"]["temp"]),
+                        "feels_like": round(data["main"]["feels_like"]),
+                        "humidity": data["main"]["humidity"],
+                        "wind": data["wind"]["speed"],
+                        "desc": data["weather"][0]["description"].capitalize(),
+                        "icon": data["weather"][0]["icon"],
+                        "country": data["sys"]["country"]
+                    }
+    except Exception as e:
+        logger.error(f"Weather error for {city}: {e}")
+    return None

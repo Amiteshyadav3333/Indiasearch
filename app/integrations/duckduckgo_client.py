@@ -50,3 +50,27 @@ async def search(query: str, max_results: int = 10, region: str = "in-en") -> li
     return await loop.run_in_executor(
         _executor, _ddg_sync_search, query, max_results, region
     )
+
+def _ddg_sync_images(query: str, max_results: int = 20, region: str = "in-en") -> list:
+    if DDGS is None: return []
+    try:
+        with DDGS() as ddgs:
+            raw = list(ddgs.images(query, region=region, max_results=max_results))
+        results = []
+        for r in raw:
+            results.append({
+                "title":   r.get("title", ""),
+                "url":     r.get("image", ""),
+                "snippet": r.get("source", ""),
+                "source":  "duckduckgo_images",
+            })
+        return results
+    except Exception as e:
+        logger.error(f"[DDG] Image search failed: {e}")
+        return []
+
+async def search_images(query: str, max_results: int = 20, region: str = "in-en") -> list:
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(
+        _executor, _ddg_sync_images, query, max_results, region
+    )

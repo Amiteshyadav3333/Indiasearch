@@ -1,84 +1,70 @@
 # app/integrations/api_client.py
-# 💰 Paid API Fallback Client — Last Resort Search
+# 💎 Paid Bing Search API Fallback
 # ─────────────────────────────────────────────────
-# Uses SerpAPI (Google Search) as the paid fallback.
+# Uses Microsoft Bing Search API as the premium fallback.
 # Hard-limited to 100 calls/day via APIQuotaManager.
-# Only called when all free sources fail.
-#
-# Env vars: SERPAPI_KEY, API_DAILY_LIMIT (default 100)
 
 import asyncio
 import logging
 import os
+import requests
 from concurrent.futures import ThreadPoolExecutor
-
 from app.services.api_quota_manager import APIQuotaManager
 
 logger = logging.getLogger(__name__)
 _executor = ThreadPoolExecutor(max_workers=2)
 
-
-def _serpapi_sync_search(query: str, max_results: int = 10) -> list:
-    """Blocking SerpAPI call — only runs if quota allows."""
+def _bing_sync_search(query: str, max_results: int = 10) -> list:
+    """Blocking Bing API call."""
     # ── Quota gate ──────────────────────────────────────────
     if not APIQuotaManager.can_call():
-        status = APIQuotaManager.status()
-        logger.warning(
-            f"[API] Daily quota exhausted ({status['used']}/{status['limit']}). "
-            f"Skipping paid API call for: {query!r}"
-        )
+        logger.warning(f"[Bing] Quota exhausted (100/100). Skipping call for: {query!r}")
         return []
 
-    api_key = os.getenv("SERPAPI_KEY", "").strip()
+    api_key = os.getenv("BING_API_KEY", "").strip()
     if not api_key:
-        logger.warning("[API] SERPAPI_KEY not set — paid fallback skipped.")
+        logger.warning("[Bing] BING_API_KEY not set in .env")
         return []
+
+    endpoint = "https://api.bing.microsoft.com/v7.0/search"
+    headers = {"Ocp-Apim-Subscription-Key": api_key}
+    params = {
+        "q": query,
+        "count": max_results,
+        "mkt": "en-IN",  # India specific market
+        "safeSearch": "Moderate"
+    }
 
     try:
-        import requests
-        url = "https://serpapi.com/search"
-        params = {
-            "q":       query,
-            "api_key": api_key,
-            "engine":  "google",
-            "gl":      "in",
-            "hl":      "en",
-            "num":     max_results,
-        }
-        resp = requests.get(url, params=params, timeout=8)
+        resp = requests.get(endpoint, headers=headers, params=params, timeout=10)
+        resp.raise_for_status()
         data = resp.json()
 
-        # ── Increment quota ONLY on successful call ──────────
+        # ── Increment quota ──────────
         count = APIQuotaManager.increment()
-        status = APIQuotaManager.status()
-        logger.info(
-            f"[API] SerpAPI call #{count}/{status['limit']} | "
-            f"{status['remaining']} remaining today | query={query!r}"
-        )
+        logger.info(f"[Bing] API call #{count}/100 | query={query!r}")
 
         results = []
-        for r in data.get("organic_results", []):
+        pages = data.get("webPages", {}).get("value", [])
+        for p in pages:
             results.append({
-                "title":   r.get("title", ""),
-                "url":     r.get("link", ""),
-                "snippet": r.get("snippet", ""),
-                "source":  "serpapi",
+                "title":   p.get("name", ""),
+                "url":     p.get("url", ""),
+                "snippet": p.get("snippet", ""),
+                "source":  "bing_api",
             })
         return results
 
     except Exception as e:
-        logger.error(f"[API] SerpAPI call failed: {e}")
+        logger.error(f"[Bing] API call error: {e}")
         return []
 
-
 async def search(query: str, max_results: int = 10) -> list:
-    """Async paid API fallback — respects 100/day quota limit."""
+    """Async Bing search wrapper."""
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(
-        _executor, _serpapi_sync_search, query, max_results
+        _executor, _bing_sync_search, query, max_results
     )
 
-
 def get_quota_status() -> dict:
-    """Return current daily quota status."""
     return APIQuotaManager.status()

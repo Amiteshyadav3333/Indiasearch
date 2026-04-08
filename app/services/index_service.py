@@ -1,11 +1,9 @@
-from elasticsearch import Elasticsearch
+# app/services/index_service.py
+import logging
+from app.integrations.elastic_client import ElasticClient
 import re
-from langdetect import detect, LangDetectException
 
-es = Elasticsearch("http://localhost:9200")
-
-INDEX_NAME = "indiasearch"
-
+logger = logging.getLogger(__name__)
 
 # ---------- CLEAN TEXT ----------
 def clean_text(text):
@@ -14,86 +12,67 @@ def clean_text(text):
     text = re.sub(r"\s+", " ", text)
     return text.strip()
 
-
 # ---------- SIMPLE SPAM DETECTOR ----------
 def is_spam(url, content):
     spam_words = [
         "casino", "betting", "loan fast", "xxx",
         "earn money fast", "porn", "viagra"
     ]
-
-    text = (url + " " + content).lower()
-
+    text = (str(url) + " " + str(content)).lower()
     return any(w in text for w in spam_words)
 
+# ---------- MAIN INDEX FUNCTION ----------
+async def index_results_async(results: list):
+    """
+    Background worker to index fresh results found from web search.
+    Follows 'Fresh Indexing' requirement.
+    """
+    if not results:
+        return
 
-# ---------- FAKE NEWS RISK (BASIC) ----------
-def fake_news_risk(content):
-    suspicious_words = [
-        "shocking truth", "exposed", "fake news", "rumor",
-        "viral claim", "unverified", "controversial"
-    ]
+    indexed_count = 0
+    for r in results:
+        url = r.get("url")
+        title = r.get("title")
+        snippet = r.get("snippet")
+        
+        if not url or not title:
+            continue
+            
+        if is_spam(url, snippet):
+            continue
+            
+        doc = {
+            "title": clean_text(title),
+            "url": url,
+            "content": clean_text(snippet),
+            "indexed_at": "now",
+            "source": r.get("source", "web_discovery")
+        }
+        
+        # Use ElasticClient to index asynchronously
+        # Using a simple doc_id based on URL to avoid duplicates in ES
+        import hashlib
+        doc_id = hashlib.md5(url.encode()).hexdigest()
+        
+        success = await ElasticClient.index_async(doc, doc_id=doc_id)
+        if success:
+            indexed_count += 1
+            
+    if indexed_count > 0:
+        logger.info(f"[IndexService] Freshly indexed {indexed_count} new results for future searches.")
 
-    score = sum(content.lower().count(w) for w in suspicious_words)
-
-    return min(score, 10)  # 0–10 scale
-
-
-# ---------- LANGUAGE DETECT ----------
-def detect_lang(text):
-    try:
-        return detect(text)
-    except LangDetectException:
-        return "unknown"
-
-
-# ---------- CREATE INDEX IF NOT EXISTS ----------
-def init_index():
-    if not es.indices.exists(index=INDEX_NAME):
-        es.indices.create(
-            index=INDEX_NAME,
-            body={
-                "mappings": {
-                    "properties": {
-                        "title": {"type": "text"},
-                        "content": {"type": "text"},
-                        "url": {"type": "keyword"},
-                        "language": {"type": "keyword"},
-                        "fake_risk": {"type": "integer"},
-                        "is_spam": {"type": "boolean"}
-                    }
-                }
-            }
-        )
-
-
-# ---------- MAIN SAVE FUNCTION ----------
-def index_document(url, title, content):
-
-    init_index()
-
+def index_document_sync(url, title, content):
+    """Synchronous version for one-off indexing."""
     title = clean_text(title)
     content = clean_text(content)
-
-    lang = detect_lang(content)
-
-    spam = is_spam(url, content)
-
-    risk = fake_news_risk(content)
+    
+    if is_spam(url, content):
+        return
 
     doc = {
         "title": title,
         "url": url,
-        "content": content,
-        "language": lang,
-        "fake_risk": risk,
-        "is_spam": spam
+        "content": content
     }
-
-    if spam:
-        print("🚨 SPAM BLOCKED:", url)
-        return
-
-    es.index(index=INDEX_NAME, document=doc)
-
-    print(f"✔ Indexed: {title}   ({lang})")
+    ElasticClient.index_doc(doc)

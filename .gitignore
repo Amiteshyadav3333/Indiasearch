@@ -41,3 +41,18 @@ node_modules/
 .next/
 out/
 .vercel
+
+# IDEs & Workspaces
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker & Services
+docker-compose.override.yml
+dump.rdb
+
+# Extras
+.cache/
+.pytest_cache/
+htmlcov/

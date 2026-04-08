@@ -7,9 +7,12 @@
 
 import logging
 import os
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+_executor = ThreadPoolExecutor(max_workers=5)
 
 # Attempt to import ES client
 try:
@@ -28,11 +31,16 @@ class ElasticClient:
     @classmethod
     def _build(cls):
         """Create the Elasticsearch connection."""
-        url = os.getenv("ELASTICSEARCH_URL", "")
+        # Use ELASTIC_URL as seen in .env
+        url = os.getenv("ELASTIC_URL") or os.getenv("ELASTICSEARCH_URL", "")
+        username = os.getenv("ELASTIC_USERNAME")
+        password = os.getenv("ELASTIC_PASSWORD")
+
         if not url or not _ES_AVAILABLE:
             return None
         try:
-            client = Elasticsearch(url, request_timeout=3)
+            auth = (username, password) if username and password else None
+            client = Elasticsearch(url, basic_auth=auth, request_timeout=3)
             if client.ping():
                 logger.info(f"[Elastic] Connected to: {url}")
                 return client
@@ -58,10 +66,7 @@ class ElasticClient:
 
     @classmethod
     def search(cls, query: str, index: str = "indiasearch", max_results: int = 10) -> list:
-        """
-        Execute a full-text search on the given index.
-        Returns normalized list of result dicts.
-        """
+        """Execute a full-text search on the given index."""
         client = cls.get_client()
         if not client:
             return []
@@ -89,11 +94,16 @@ class ElasticClient:
                     "score":   hit.get("_score", 0),
                     "source":  "elasticsearch",
                 })
-            logger.info(f"[Elastic] Found {len(results)} hits for: {query!r}")
             return results
         except Exception as e:
             logger.error(f"[Elastic] Query failed: {e}")
             return []
+
+    @classmethod
+    async def search_async(cls, query: str, index: str = "indiasearch", max_results: int = 10) -> list:
+        """Async search wrapper."""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(_executor, cls.search, query, index, max_results)
 
     @classmethod
     def index_doc(cls, doc: dict, doc_id: str = None, index: str = "indiasearch") -> bool:
@@ -102,8 +112,15 @@ class ElasticClient:
         if not client:
             return False
         try:
-            client.index(index=index, id=doc_id, body=doc)
+            client.index(index=index, id=doc_id, document=doc)
             return True
         except Exception as e:
             logger.error(f"[Elastic] Index failed: {e}")
             return False
+
+    @classmethod
+    async def index_async(cls, doc: dict, doc_id: str = None, index: str = "indiasearch") -> bool:
+        """Async index wrapper."""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(_executor, cls.index_doc, doc, doc_id, index)
+

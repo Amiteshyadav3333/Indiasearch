@@ -95,15 +95,13 @@ def groq_chat(query, docs, lang="English", pdf_content=None):
         {pdf_info}
         
         STRICT INSTRUCTIONS FOR AI:
-        1. IF A DOCUMENT (CORE DOCUMENT CONTENT) IS PROVIDED ABOVE, IT IS YOUR TOTAL FOCUS. RETAIN ALL INFORMATION FOR EVERY QUESTION.
-        2. IF NO DOCUMENT IS PROVIDED, USE SEARCH CONTEXT OR YOUR INTERNAL KNOWLEDGE IMMEDIATELY.
+        1. IF 'CORE DOCUMENT CONTENT' IS PROVIDED ABOVE: You MUST answer the user's query EXCLUSIVELY using the information within the 'CORE DOCUMENT CONTENT'. DO NOT use any external knowledge. If the answer is not found in the document, reply strictly with: "Is document mein aisi koi information nahi mili" or the equivalent in {lang}. Explain from the document smoothly.
+        2. IF NO CORE DOCUMENT IS PROVIDED: Use the General Search Context provided below or your internal knowledge to give the best possible answer.
         3. DO NOT ASK THE USER TO UPLOAD A FILE. NEVER SAY 'Please upload a PDF'. 
-        4. IF NO FILE IS THERE, JUST GIVE THE BEST ANSWER FROM YOUR OWN BRAIN.
-        5. FOR GENERAL QUESTIONS, PROVIDE A ROBUST 5-LINE ANSWER.
-        6. NO META-TALK. DON'T SAY 'Understood' OR 'Processing'. START THE ANSWER NOW.
-        7. Respond in {lang}.
+        4. IF ANSWERING GENERALLY, PROVIDE A ROBUST 5-LINE ANSWER.
+        5. NO META-TALK. DON'T SAY 'Understood' OR 'Processing'. START THE ANSWER NOW in {lang}.
         
-        General Search Context:
+        General Search Context (ignore if Core Document is provided):
         {context}
     """
 

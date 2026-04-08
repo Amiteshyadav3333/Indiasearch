@@ -1,35 +1,52 @@
 # app/services/cricket_service.py
-# 🏏 Cricket Service — Live Scores Business Logic
-# ----------------------------------------
-# Responsibilities:
-#   - Fetch live match scores from CricAPI / CricketData.org
-#   - Cache results in Redis (TTL: 30 sec for live, 10 min for schedule)
-#   - Parse and format scorecard data
-#
-# Depends on:
-#   app/integrations/cricket_client.py  → CricAPI
-#   app/cache/cache_manager.py          → Redis
+import os
+import aiohttp
+import logging
+from datetime import datetime
 
+logger = logging.getLogger(__name__)
 
-class CricketService:
-    """Handles cricket data fetching and caching."""
-
-    @staticmethod
-    def get_live_scores() -> list:
-        """Fetch live cricket scores. Short TTL cache (30 sec)."""
-        # TODO: Check Redis cache (key: cricket:live)
-        # TODO: Call CricketClient.get_live()
-        raise NotImplementedError("Migrate cricket logic from api.py")
-
-    @staticmethod
-    def get_schedule() -> list:
-        """Fetch upcoming match schedule."""
-        # TODO: Check Redis cache (key: cricket:schedule)
-        # TODO: Call CricketClient.get_schedule()
-        raise NotImplementedError
-
-    @staticmethod
-    def get_scorecard(match_id: str) -> dict:
-        """Fetch full scorecard for a given match ID."""
-        # TODO: Call CricketClient.get_scorecard(match_id)
-        raise NotImplementedError
+async def fetch_live_score() -> list:
+    """
+    Fetches real-time live cricket scores.
+    """
+    api_key = os.getenv("cricketdata_API_KEY")
+    if not api_key:
+        return None
+        
+    url = f"https://api.cricapi.com/v1/currentMatches?apikey={api_key}"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=10) as resp:
+                data = await resp.json()
+                if data.get("status") == "success":
+                    matches = data.get("data", [])
+                    processed = []
+                    now_time = datetime.now().strftime("%I:%M %p")
+                    
+                    for m in matches:
+                        if not m.get("matchStarted"): continue
+                        
+                        scores = m.get("score", [])
+                        live_info = {"r": 0, "w": 0, "o": 0, "inning": "Live"}
+                        if scores:
+                            s = scores[0]
+                            live_info = {
+                                "r": s.get("r", 0),
+                                "w": s.get("w", 0),
+                                "o": s.get("o", 0),
+                                "inning": s.get("inning", "Ongoing")
+                            }
+                        
+                        processed.append({
+                            "type": "cricket",
+                            "name": m.get("name"),
+                            "status": m.get("status"),
+                            "venue": m.get("venue"),
+                            "score": live_info,
+                            "updated_at": now_time
+                        })
+                    return processed[:5]
+    except Exception as e:
+        logger.error(f"Cricket API error: {e}")
+    return None

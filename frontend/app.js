@@ -663,9 +663,9 @@ if (pdfInput) {
 }
 
 // ═══════════════════════════════════════════
-// HOME RESET
+// HOME RESET & CLEANUP
 // ═══════════════════════════════════════════
-function resetToHome() {
+async function resetToHome() {
   searchInput.value = "";
   resultsBox.innerHTML = "";
   aiSummaryBox.innerHTML = "";
@@ -675,7 +675,22 @@ function resetToHome() {
   if (historyBox) historyBox.style.display = "flex";
   if (heroSection) heroSection.classList.remove("hidden");
   if (scanStatus) scanStatus.textContent = "";
+  
+  // Clear file inputs and visual previews
+  if (pdfInput) pdfInput.value = "";
+  if (cameraInput) cameraInput.value = "";
+  if (aiPdfPreview) {
+      aiPdfPreview.style.display = "none";
+      aiPdfPreview.innerHTML = "";
+  }
+  
   closeAutocomplete();
+  
+  // Clear backend memory context for this session
+  const finalSess = authState.sessionToken || authState.guestSession;
+  try {
+      await apiJsonRequest("/clear-context", { session_token: finalSess });
+  } catch(e) { console.error("Failed to clear context"); }
 }
 
 // ═══════════════════════════════════════════
@@ -766,86 +781,59 @@ async function search(pageNumber = 1, aiMode = false) {
       return;
     }
 
-    // ── Weather Card Integration ──
-    let weatherHtml = "";
-    if (data.weather_data && pageNumber === 1) {
-      const w = data.weather_data;
-      const wLabel = await translateText("Weather in", targetLang);
-      const feeLabel = await translateText("Feels like", targetLang);
-      const humLabel = await translateText("Humidity", targetLang);
-      const windLabel = await translateText("Wind", targetLang);
-      
-      weatherHtml = `
-        <div class="weather-card animate-slide-up">
-            <div class="weather-main">
-                <div class="weather-info">
-                    <h3 class="weather-city">${w.city}, ${w.country}</h3>
-                    <p class="weather-label">${wLabel}</p>
-                    <div class="weather-temp">${w.temp}°C</div>
-                    <p class="weather-desc">${w.desc}</p>
-                </div>
-                <div class="weather-visual">
-                    <img src="https://openweathermap.org/img/wn/${w.icon}@4x.png" alt="Weather Icon">
-                </div>
-            </div>
-            <div class="weather-details">
-                <div class="w-det-item"><span>${feeLabel}</span><strong>${w.feels_like}°C</strong></div>
-                <div class="w-det-item"><span>${humLabel}</span><strong>${w.humidity}%</strong></div>
-                <div class="w-det-item"><span>${windLabel}</span><strong>${w.wind} m/s</strong></div>
-            </div>
-        </div>
-      `;
-    }
-
     // ── AI Summary / Overview ──
     let summaryHtml = "";
     let shouldAnimate = false;
     let rawText = "";
 
-    if (data.summary && pageNumber === 1) {
-      rawText = data.summary;
-      if (aiMode) {
+    if (data.ai_summary && pageNumber === 1) {
+      rawText = typeof data.ai_summary === 'string' ? data.ai_summary : (data.ai_summary.answer || String(data.ai_summary));
+      if (aiMode || data.intent === 'ai') {
         shouldAnimate = true;
         summaryHtml = `
           <div class="ai-overview-card">
             <div class="ai-overview-header">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-              <span>Ask AI</span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="url(#ai-grad)" stroke-width="2.5"><defs><linearGradient id="ai-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#3b82f6" /><stop offset="100%" stop-color="#8b5cf6" /></linearGradient></defs><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              <span style="background: linear-gradient(90deg, #3b82f6, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">IndiaSearch AI</span>
             </div>
             <div class="ai-overview-text" id="streamingAI"></div>
-            <div class="ai-source-strip" id="aiSources"></div>
           </div>`;
       } else {
         summaryHtml = `
           <div class="summary-card">
-            <div class="summary-label">✨ AI Summary</div>
-            <div class="summary-text">${rawText}</div>
+            <div class="summary-label">✨ Instant AI Answer</div>
+            <div class="summary-text">${marked.parse(rawText)}</div>
           </div>`;
       }
     }
 
-    // ── Pre-render Smart Panels (Weather, AI Summary, Wikipedia) ──
+    // ── Pre-render Smart Panels (Wikipedia) ──
     let wikiHtml = "";
     if (!aiMode && data.knowledge_panel && pageNumber === 1 && currentFilter === "all") {
       const kp = data.knowledge_panel;
       const [kt, ks] = await Promise.all([translateText(kp.title, targetLang), translateText(kp.snippet, targetLang)]);
+      
+      const cleanImg = kp.image ? kp.image.replace(/'/g, "%27") : "";
       const imgTag = kp.image
-        ? `<img src="${kp.image}" alt="${kt}" style="float:right;margin:0 0 12px 16px;width:110px;height:110px;object-fit:cover;border-radius:10px;cursor:zoom-in;" onclick="openImageModal('${kp.image.replace("400px-", "1024px-")}')">`
+        ? `<img src="${kp.image}" alt="${kt}" style="float:right;margin:0 0 12px 16px;width:110px;height:110px;object-fit:cover;border-radius:10px;cursor:zoom-in;box-shadow: 0 4px 10px rgba(0,0,0,0.1);" onclick="openImageModal('${cleanImg}')">`
         : "";
+        
+      const shortSnippet = ks.length > 180 ? ks.substring(0, 180) + '...' : ks;
+
       wikiHtml = `
-        <div class="knowledge-card" style="overflow:hidden;">
+        <div class="knowledge-card" style="overflow:hidden; padding: 18px; border-radius: 14px; background: var(--bg-card); box-shadow: var(--shadow-md); margin-bottom: 20px; border: 1px solid var(--border);">
           ${imgTag}
-          <h3>📚 ${kt}</h3>
-          <p class="knowledge-preview">${ks}</p>
-          <details class="knowledge-overview">
-            <summary>Overview</summary>
-            <p class="knowledge-full" style="margin-top:10px;">${ks}</p>
+          <h3 style="margin-top:0; color: var(--text-primary); font-size: 20px;">📚 ${kt}</h3>
+          <p class="knowledge-preview" style="color: var(--text-secondary); line-height: 1.5; font-size: 14px; margin-bottom: 12px;">${shortSnippet}</p>
+          <details class="knowledge-overview" style="margin-top: 10px; background: rgba(0,0,0,0.03); padding: 10px; border-radius: 8px;">
+            <summary style="cursor: pointer; font-weight: 600; color: var(--accent-blue); font-size: 13px;">View More</summary>
+            <p class="knowledge-full" style="margin-top:10px; color: var(--text-main); font-size: 14px; line-height: 1.6;">${ks}</p>
+            <a href="${kp.url}" target="_blank" class="knowledge-link" style="display:inline-block; margin-top: 10px; font-weight: bold; color: var(--accent);">Read on Wikipedia →</a>
           </details>
-          <a href="${kp.url}" target="_blank">Wikipedia →</a>
         </div>`;
     }
 
-    // Set AI Summary and AI Link Section
+    // Initialize the box with AI and Wiki
     aiSummaryBox.innerHTML = summaryHtml + wikiHtml;
 
     // Trigger Animation if needed
@@ -853,31 +841,37 @@ async function search(pageNumber = 1, aiMode = false) {
       const target = document.getElementById("streamingAI");
       if (target) {
         let i = 0;
-        const speed = 15; // ms
+        const speed = 10; // Fast typing speed
         function typeWriter() {
            if (i < rawText.length) {
-              const char = rawText.charAt(i);
-              target.innerHTML += char === "\n" ? "<br>" : char;
-              i++;
+              const chunk = rawText.substr(i, 5); // Type 5 chars at a time
+              target.innerHTML += chunk.replace(/\n/g, "<br>");
+              i += 5;
               setTimeout(typeWriter, speed);
               if (mainWrap) mainWrap.scrollTop = mainWrap.scrollHeight;
+           } else {
+              target.innerHTML = marked.parse(rawText); // Run through markdown parser once done
            }
         }
         typeWriter();
       }
     }
 
-    // ── Weather Panel (Smart Answer) ──
-    if (data.weather) {
-      aiSummaryBox.innerHTML = renderWeatherPanel(data.weather) + aiSummaryBox.innerHTML;
-    }
-
-    if (data.sports) {
-      aiSummaryBox.innerHTML = renderSportsPanel(data.sports) + aiSummaryBox.innerHTML;
-    }
-
-    if (data.stocks) {
-      aiSummaryBox.innerHTML = renderStockPanel(data.stocks) + aiSummaryBox.innerHTML;
+    // ── Special Panels Integration (Weather, Sports, Finance) ──
+    if (data.special_data && pageNumber === 1) {
+      let specialHtml = "";
+      if (data.intent === 'weather') {
+        specialHtml = renderWeatherPanel(data.special_data);
+      } else if (data.intent === 'sports') {
+        specialHtml = renderSportsPanel(data.special_data);
+      } else if (data.intent === 'finance') {
+        specialHtml = renderStockPanel(data.special_data);
+      }
+      
+      if (specialHtml) {
+        // Insert special panels BEFORE the AI summary
+        aiSummaryBox.innerHTML = specialHtml + aiSummaryBox.innerHTML;
+      }
     }
 
     if (currentFilter === "images" && data.warning) {
@@ -935,21 +929,7 @@ async function search(pageNumber = 1, aiMode = false) {
       try { host = new URL(item.url).hostname.replace(/^www\./, ""); } catch { }
 
       if (aiMode) {
-        // Render Source Badges for AI
-        const sourceHtml = `
-          <div class="ai-link-item">
-            <span class="host-name">${host}</span>
-            <a href="${item.url}" target="_blank" class="ai-link-title">${tt}</a>
-          </div>`;
-        
-        // Append to source strip if on page 1
-        if (pageNumber === 1) {
-             const strip = document.getElementById("aiSources");
-             if (strip) strip.innerHTML += sourceHtml;
-        }
-        return ""; // Don't return regular results in full AI mode?
-        // Actually, user said chat mode, so we hide normal results or show them below.
-        // Let's show only top 3 as small references.
+        return ""; // In true AI Mode, don't show normal results or source strips
       }
 
       if (isImages) {
@@ -992,7 +972,7 @@ async function search(pageNumber = 1, aiMode = false) {
     const htmlItems = await Promise.all(resultPromises);
 
     if (aiMode) {
-      resultsBox.innerHTML = `<div class="ai-links-card"><h3>Sources</h3>${htmlItems.join("")}</div>`;
+      resultsBox.innerHTML = "";
       if (paginationContainer) paginationContainer.innerHTML = "";
     } else if (currentFilter === "images") {
       resultsBox.innerHTML = `<div class="image-grid">${htmlItems.join("")}</div>`;

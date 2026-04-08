@@ -31,9 +31,10 @@ def get_conn():
     clean_url = DATABASE_URL.strip().strip('"').strip("'")
     
     # Regex to capture: postgresql://[user]:[pass]@[host]:[port]/[db]
-    # This captures everything between : and @ as the password, handles multiple @
+    # Regex to capture: postgresql://[user]:[pass]@[host]:[port]/[db]?params
+    # This captures everything up to the? for the database name
     import re
-    pattern = r"postgresql://([^:]+):(.+)@([^:/]+):?(\d*)?/(.+)"
+    pattern = r"postgresql://([^:]+):(.+?)@([^:/]+):?(\d*)?/([^?]+)"
     match = re.match(pattern, clean_url)
     
     if match:
@@ -51,9 +52,10 @@ def get_conn():
             )
         except Exception as e:
             print(f"DB CONNECTION ERROR (Parsed): {e}")
+            raise e
 
-    # Fallback to direct connection if regex doesn't match or fails
-    return psycopg2.connect(clean_url, cursor_factory=psycopg2.extras.RealDictCursor)
+    # Fallback to direct connection if regex doesn't match
+    raise ValueError(f"Could not parse DATABASE_URL correctly. Check formatting.")
 
 
 def init_db():
