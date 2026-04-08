@@ -18,11 +18,11 @@ from fastapi import UploadFile, File, Form
 PDF_STORE = {} 
 
 # Look for .env in the current directory, or in the parent directory of this file
-DOTENV_PATH = os.path.join(os.path.dirname(__file__), "..", "..", ".env")
+DOTENV_PATH = os.path.join(os.path.dirname(__file__), "..", ".env")
 load_dotenv(DOTENV_PATH, override=True)
 if not os.getenv("ELASTIC_URL"):
-    # Fallback for when run from within the Indiasearch folder
-    load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"), override=True)
+    # Fallback if run from within the app folder
+    load_dotenv(os.path.join(os.path.dirname(__file__), ".env"), override=True)
 
 FIREBASE_PROJECT_ID = os.getenv("FIREBASE_PROJECT_ID", "indiasearch-975e1")
 FIREBASE_CREDS_JSON = os.getenv("FIREBASE_CREDENTIALS")
