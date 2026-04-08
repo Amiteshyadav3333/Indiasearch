@@ -34,7 +34,7 @@
         <select id="languageSelect" class="lang-select" title="Translate Results">
           <option value="en">🇮🇳 English</option>
           <option value="hi">हिंदी</option>
-          <option value="as">অসমীয়া</option>
+          <option value="as">অসমीया</option>
           <option value="bn">বাংলা</option>
           <option value="brx">Bodo</option>
           <option value="doi">Dogri</option>
@@ -55,44 +55,21 @@
           <option value="ta">தமிழ்</option>
           <option value="te">తెలుగు</option>
           <option value="ur">اردو</option>
-          <option value="hi">Bhojpuri</option>
+          <option value="bho">Bhojpuri</option>
         </select>
 
-        <button id="authButton" class="btn-outline" style="display:none;">Sign In</button>
-
-        <div id="userPill" class="user-pill" style="display:none;" onclick="toggleUserDropdown(event)">
-          <div class="user-avatar" id="userAvatar">U</div>
-          <span class="dots-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-              stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="1.5" />
-              <circle cx="12" cy="5" r="1.5" />
-              <circle cx="12" cy="19" r="1.5" />
+        <!-- User Hub -->
+        <div class="user-action-hub">
+          <button class="menu-dots-btn" id="userMenuBtn" onclick="toggleUserMenu()">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="1" />
+              <circle cx="12" cy="5" r="1" />
+              <circle cx="12" cy="19" r="1" />
             </svg>
-          </span>
+          </button>
 
           <div id="userDropdown" class="user-dropdown" style="display:none;">
-            <div class="user-dropdown-header">
-              <span id="userEmail" class="user-email-text"></span>
-            </div>
-            <div class="dropdown-sep"></div>
-            <button class="dropdown-item" onclick="openProfileModal()">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-                stroke-linecap="round" stroke-linejoin="round">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                <circle cx="12" cy="7" r="4" />
-              </svg>
-              My Profile & History
-            </button>
-            <div class="dropdown-sep"></div>
-            <button class="dropdown-item danger" onclick="logoutUser()">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-                stroke-linecap="round" stroke-linejoin="round">
-                <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
-                <line x1="12" y1="2" x2="12" y2="12" />
-              </svg>
-              Logout
-            </button>
+            <!-- Content dynamically generated in JS based on auth state -->
           </div>
         </div>
       </div>
@@ -112,17 +89,27 @@
       <!-- Standard Mode -->
       <div class="search-box" id="searchBoxStandard">
         <span class="s-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
         </span>
         <input id="searchInput" type="text" placeholder="Kuch bhi search karo…" autocomplete="off" spellcheck="false">
         <div class="s-actions">
           <button onclick="toggleVoiceSearch()" id="micButton" class="icon-btn" title="Voice Search">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" /></svg>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+              <line x1="12" y1="19" x2="12" y2="23" />
+              <line x1="8" y1="23" x2="16" y2="23" />
+            </svg>
           </button>
-          <button onclick="openCameraPicker()" id="cameraButtonStandard" class="icon-btn" title="Camera Search">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          <button onclick="startLiveScan()" id="cameraButtonStandard" class="icon-btn" title="Live Camera & Scanning">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+              <circle cx="12" cy="13" r="4" />
+            </svg>
           </button>
           <div class="s-divider"></div>
           <button onclick="enterAiMode()" class="btn-ai-toggle" title="Switch to AI Mode">
@@ -139,28 +126,39 @@
         <div class="ai-glow-bg"></div>
         <div id="aiPdfPreview" class="ai-pdf-preview" style="display:none;"></div>
         <div class="ai-input-wrap">
-          <textarea id="aiSearchInput" placeholder="Puchho jo aapke mann mein hai... (AI Mode)" rows="1" oninput="autoExpand(this)"></textarea>
+          <textarea id="aiSearchInput" placeholder="Puchho jo aapke mann mein hai... (AI Mode)" rows="1"
+            oninput="autoExpand(this)"></textarea>
           <div class="ai-actions">
-             <button onclick="openPdfPicker()" class="ai-mini-btn" title="PDF Analysis">
-               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-             </button>
-             <button onclick="openCameraPicker()" class="ai-mini-btn" title="Visual Recognition">
-               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-             </button>
-             <button class="ai-mini-btn" onclick="exitAiMode()" title="Return to Search Engine">
-               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                 <line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline>
-               </svg>
-             </button>
-             <button onclick="searchAI()" class="ai-send-btn">
-               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="9 18 15 12 9 6"></polyline></svg>
-             </button>
+            <button onclick="openPdfPicker()" class="ai-mini-btn" title="PDF Analysis">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+              </svg>
+            </button>
+            <button onclick="startLiveScan()" class="ai-mini-btn" title="Visual Recognition">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                <circle cx="12" cy="13" r="4" />
+              </svg>
+            </button>
+            <button class="ai-mini-btn" onclick="exitAiMode()" title="Return to Search Engine">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <line x1="19" y1="12" x2="5" y2="12"></line>
+                <polyline points="12 19 5 12 12 5"></polyline>
+              </svg>
+            </button>
+            <button onclick="searchAI()" class="ai-send-btn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </button>
           </div>
         </div>
       </div>
 
       <div id="autocompleteDropdown" class="autocomplete-dropdown"></div>
-      <input id="cameraInput" type="file" accept="image/*" capture="environment" hidden>
+      <input id="cameraInput" type="file" accept="image/*" hidden>
       <input id="pdfInput" type="file" accept="application/pdf" hidden>
       <p id="scanStatus" class="scan-status"></p>
     </div>
@@ -192,19 +190,31 @@
         Images
       </button>
       <button class="filter-pill" onclick="setFilter('videos')">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="23 7 16 12 23 17 23 7" /><rect x="1" y="5" width="15" height="14" rx="2" /></svg>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polygon points="23 7 16 12 23 17 23 7" />
+          <rect x="1" y="5" width="15" height="14" rx="2" />
+        </svg>
         Videos
       </button>
       <button class="filter-pill" onclick="setFilter('weather')">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17.5 19a3.5 3.5 0 1 1 0-7c.1 0 .2 0 .3 0a5 5 0 1 1 9.2 2" /><path d="M12 18V22" /><path d="M8 22L12 18L16 22" /></svg>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M17.5 19a3.5 3.5 0 1 1 0-7c.1 0 .2 0 .3 0a5 5 0 1 1 9.2 2" />
+          <path d="M12 18V22" />
+          <path d="M8 22L12 18L16 22" />
+        </svg>
         Weather
       </button>
       <button class="filter-pill" onclick="setFilter('score')">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 8v8M8 12h8" />
+        </svg>
         Live Score
       </button>
       <button class="filter-pill ai-tab" onclick="enterAiMode()">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+        </svg>
         Ask AI
       </button>
     </div>
@@ -226,6 +236,29 @@
 
     <!-- ═══ AI SUMMARY ═══ -->
     <div id="aiSummary" class="ai-summary-wrap"></div>
+
+    <!-- ═══ LIVE SCANNER VIEW ═══ -->
+    <div id="liveScanner" class="live-scanner" style="display:none;">
+      <div class="scanner-header">
+        <span>📷 Live Scanner</span>
+        <button onclick="stopLiveScan()" class="scanner-close">&times;</button>
+      </div>
+      <div class="scanner-video-wrap">
+        <video id="scannerVideo" autoplay playsinline></video>
+        <div class="scanner-guide"></div>
+      </div>
+      <p id="liveScanStatus">Align QR code within the frame</p>
+      <div class="scanner-footer">
+        <button onclick="openImagePicker(); stopLiveScan();" class="scanner-gallery-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <circle cx="8.5" cy="8.5" r="1.5" />
+            <polyline points="21 15 16 10 5 21" />
+          </svg>
+          Upload from Gallery
+        </button>
+      </div>
+    </div>
 
     <!-- ═══ RESULTS ═══ -->
     <div id="results" class="results-wrap"></div>
@@ -289,79 +322,40 @@
   </div>
 
   <!-- ═══ AUTH MODAL ═══ -->
-  <div id="authModal" class="overlay-modal" style="display:none;">
+  <div id="authModal" class="overlay-modal" style="display:none;" onclick="if(event.target===this)closeAuthModal()">
     <div class="auth-card">
-      <div class="auth-brand">
-        <span class="auth-brand-india">India</span><span class="auth-brand-search">Search</span>
-      </div>
-      <h2 class="auth-title">Welcome Back</h2>
-      <p class="auth-sub">Sign in to access your search history and preferences</p>
-
-      <div id="authMessage" class="auth-msg"></div>
-
-      <!-- Firebase Auth Forms -->
-      <div id="firebaseAuthForm" class="auth-form">
-        <div class="field-wrap">
-          <label class="field-label">Email or Mobile Number</label>
-          <input id="firebaseIdentifier" class="field-input" type="text" placeholder="+91... or email@example.com">
-        </div>
-
-        <!-- Recaptcha Container for Phone Auth -->
-        <div id="recaptcha-container" style="margin-bottom: 12px; display: flex; justify-content: center;"></div>
-
-        <button class="btn-primary full-w" onclick="requestFirebaseAuth()">Continue with Firebase</button>
+      <div class="auth-header">
+        <h2 id="authTitle">Sign In</h2>
+        <button class="close-btn" onclick="closeAuthModal()">&times;</button>
       </div>
 
-      <!-- OTP Form for Phone Auth -->
-      <div id="firebaseOtpForm" class="auth-form" style="display:none;">
-        <div class="field-wrap">
-          <label class="field-label">Enter OTP sent to your phone</label>
-          <input id="firebaseOtpCode" class="field-input" type="text" placeholder="6-digit OTP">
-        </div>
-        <button class="btn-primary full-w" onclick="submitFirebaseOtp()">Verify Phone</button>
+      <div class="auth-tabs">
+        <button id="emailTab" class="auth-tab active" onclick="setAuthMethod('email')">Email</button>
+        <button id="phoneTab" class="auth-tab" onclick="setAuthMethod('phone')">Mobile</button>
       </div>
 
-      <!-- Password Form for Email Auth -->
-      <div id="firebaseEmailForm" class="auth-form" style="display:none;">
-        <div class="field-wrap">
-          <label class="field-label">Email Password</label>
-          <div class="pw-wrap">
-            <input id="firebaseEmailPassword" class="field-input" type="password" placeholder="Password">
-            <button class="pw-toggle" onclick="togglePasswordVisibility('firebaseEmailPassword', this)">Show</button>
-          </div>
-        </div>
-        <div style="text-align: right; margin-top: -5px;">
-          <button class="link-btn" onclick="sendResetEmail()">Forgot Password?</button>
-        </div>
-        <button class="btn-primary full-w" onclick="submitFirebaseEmail()">Sign In / Sign Up</button>
-        <div style="font-size: 12px; color: var(--text-muted); margin-top: 10px; text-align: center;">
-          (If email is new, an account will be created and verification email sent)
-        </div>
-      </div>
-    </div>
-  </div>
+      <!-- Email Form -->
+      <form id="emailForm" class="auth-form" onsubmit="handleAuthSubmit(event)">
+        <input type="email" id="authEmail" placeholder="Email Address" required>
+        <input type="password" id="authPassword" placeholder="Password" required>
+        <button type="submit" id="authSubmitBtn" class="btn-primary">Continue</button>
+      </form>
 
-  <!-- ═══ PROFILE MODAL ═══ -->
-  <div id="profileModal" class="overlay-modal" style="display:none;"
-    onclick="if(event.target===this)closeProfileModal()">
-    <div class="auth-card profile-card">
-      <button class="modal-close-btn" onclick="closeProfileModal()">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <line x1="18" y1="6" x2="6" y2="18" />
-          <line x1="6" y1="6" x2="18" y2="18" />
-        </svg>
-      </button>
-      <h2 class="auth-title">Your Profile</h2>
-      <div id="profileSummary" class="profile-summary"></div>
-      <div class="profile-section">
-        <h3 class="section-label" style="margin-bottom:12px;">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <circle cx="12" cy="12" r="10" />
-            <polyline points="12 6 12 12 16 14" />
-          </svg>
-          Recent Searches
-        </h3>
-        <div id="profileHistory" class="profile-history-list"></div>
+      <!-- Phone Form -->
+      <form id="phoneForm" class="auth-form" style="display:none;" onsubmit="handlePhoneSubmit(event)">
+        <div id="recaptcha-container"></div>
+        <div class="phone-input-group">
+          <span class="country-code">+91</span>
+          <input type="tel" id="authPhone" placeholder="Mobile Number" pattern="[0-9]{10}">
+        </div>
+        <div id="otpGroup" style="display:none;">
+          <input type="text" id="authOtp" placeholder="Enter 6-digit OTP">
+        </div>
+        <button type="submit" id="phoneSubmitBtn" class="btn-primary">Send OTP</button>
+      </form>
+
+      <div class="auth-footer">
+        <p id="authSwitchText">Don't have an account? <a href="#" onclick="toggleAuthMode()">Sign Up</a></p>
       </div>
     </div>
   </div>

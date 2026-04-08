@@ -57,7 +57,7 @@ def groq_vision_identify(b64_image):
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": "Identify this person or object. If it is a person, provide THEIR FULL NAME and official search keywords for findings their social media (Instagram, Facebook, X/Twitter). If it is a famous person, give their name. If not, describe the person so I can search for them. Output ONLY the identification string."},
+                        {"type": "text", "text": "Identify what is in this image. If it's a person, give their full name and social media search keywords. If it's an object, name it. If it contains a QR code, barcode, or text, try to extract and summarize the information or link. Output ONLY the identification or extracted content string for search engine use."},
                         {
                             "type": "image_url",
                             "image_url": {

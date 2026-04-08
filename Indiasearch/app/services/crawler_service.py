@@ -5,9 +5,12 @@ from urllib.parse import urljoin, urldefrag, urlparse
 import re
 
 try:
-    from .indexer import index_document
+    from app.services.index_service import index_document
 except ImportError:
-    from indexer import index_document
+    try:
+        from indexer import index_document
+    except ImportError:
+        from Indiasearch.indexer import index_document
 
 class Crawler:
     def __init__(self, max_pages=300, max_depth=2, max_concurrency=15, timeout=7):

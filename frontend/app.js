@@ -7,6 +7,21 @@ const LOCAL_API_BASE = "http://127.0.0.1:8000";
 const PROD_API_BASE = "https://indiasearch-production.up.railway.app";
 let activeApiBase = isLocalHost ? LOCAL_API_BASE : PROD_API_BASE;
 
+// ── Firebase Config (Update with your own keys) ──
+const firebaseConfig = {
+  apiKey: "AIzaSyAz-DUMMY-KEY-REPLACE-ME",
+  authDomain: "indiasearch-975e1.firebaseapp.com",
+  projectId: "indiasearch-975e1",
+  storageBucket: "indiasearch-975e1.appspot.com",
+  messagingSenderId: "367253459142",
+  appId: "1:367253459142:web:7f6f1a8e1a1e1a1e1a1e1a"
+};
+
+if (!firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
+}
+const auth = firebase.auth();
+
 // ── DOM Refs ──
 const searchInput = document.getElementById("searchInput");
 const resultsBox = document.getElementById("results");
@@ -15,15 +30,19 @@ const micButton = document.getElementById("micButton");
 const languageSelect = document.getElementById("languageSelect");
 const cameraInput = document.getElementById("cameraInput");
 const scanStatus = document.getElementById("scanStatus");
-const authModal = document.getElementById("authModal");
-const authMessage = document.getElementById("authMessage");
-const authButton = document.getElementById("authButton");
 
 const aiSearchInput = document.getElementById("aiSearchInput");
 const searchBoxStandard = document.getElementById("searchBoxStandard");
 const searchBoxAi = document.getElementById("searchBoxAi");
 const aiPdfPreview = document.getElementById("aiPdfPreview");
 const mainWrap = document.querySelector(".main-wrap");
+
+const heroSection = document.getElementById("heroSection");
+const searchFiltersDiv = document.getElementById("searchFilters");
+const trendingContainer = document.getElementById("trendingContainer");
+const historyBox = document.getElementById("searchHistory");
+const paginationContainer = document.getElementById("pagination");
+const siteHeader = document.getElementById("siteHeader");
 
 /** ── AI Mode Manager ── **/
 function enterAiMode() {
@@ -72,30 +91,186 @@ if (aiSearchInput) {
         }
     });
 }
-const userPill = document.getElementById("userPill");
-const userEmail = document.getElementById("userEmail");
-const userAvatar = document.getElementById("userAvatar");
-const profileModal = document.getElementById("profileModal");
-const profileSummary = document.getElementById("profileSummary");
-const profileHistory = document.getElementById("profileHistory");
-const heroSection = document.getElementById("heroSection");
-const searchFiltersDiv = document.getElementById("searchFilters");
-const trendingContainer = document.getElementById("trendingContainer");
-const historyBox = document.getElementById("searchHistory");
-const paginationContainer = document.getElementById("pagination");
-const siteHeader = document.getElementById("siteHeader");
+
 
 let recognition;
 let isListening = false;
 let attachedScan = null;
+
+// Combined Identity & Session Management
 let authState = {
+  user: null,
+  isGuest: true,
   sessionToken: localStorage.getItem("sessionToken") || "",
-  user: JSON.parse(localStorage.getItem("authUser") || "null"),
-  guestSession: localStorage.getItem("guestSession") || `guest_${Math.random().toString(36).substr(2, 9)}`
+  guestId: localStorage.getItem("guestSession") || `guest_${Math.random().toString(36).substr(2, 9)}`
 };
+
+let activeQuery = ""; // Persistent query for pagination after input is cleared
+
 if (!localStorage.getItem("guestSession")) {
-  localStorage.setItem("guestSession", authState.guestSession);
+  localStorage.setItem("guestSession", authState.guestId);
 }
+
+// ── Auth Logic ──
+const authModal = document.getElementById("authModal");
+const userDropdown = document.getElementById("userDropdown");
+let currentAuthMode = "signin"; 
+let currentAuthMethod = "email"; 
+let confirmationResult = null; 
+
+function toggleUserMenu() {
+  const dropdown = document.getElementById("userDropdown");
+  if (!dropdown) return;
+  const isHidden = dropdown.style.display !== "flex";
+  
+  if (isHidden) {
+    updateUserUI(); // Fill content first
+    dropdown.style.display = "flex";
+  } else {
+    dropdown.style.display = "none";
+  }
+}
+
+function openAuthModal(mode = "signin") {
+  currentAuthMode = mode;
+  if (authModal) {
+    authModal.style.display = "flex";
+    document.getElementById("authTitle").innerText = mode === "signin" ? "Sign In" : "Sign Up";
+    document.getElementById("authSwitchText").innerHTML = mode === "signin" 
+      ? `Don't have an account? <a href="#" onclick="toggleAuthMode()">Sign Up</a>`
+      : `Already have an account? <a href="#" onclick="toggleAuthMode()">Sign In</a>`;
+  }
+}
+
+function closeAuthModal() {
+  if (authModal) authModal.style.display = "none";
+}
+
+function toggleAuthMode() {
+  openAuthModal(currentAuthMode === "signin" ? "signup" : "signin");
+}
+
+function setAuthMethod(method) {
+  currentAuthMethod = method;
+  document.getElementById("emailTab").classList.toggle("active", method === "email");
+  document.getElementById("phoneTab").classList.toggle("active", method === "phone");
+  document.getElementById("emailForm").style.display = method === "email" ? "flex" : "none";
+  document.getElementById("phoneForm").style.display = method === "phone" ? "flex" : "none";
+}
+
+async function handleAuthSubmit(e) {
+  e.preventDefault();
+  const email = document.getElementById("authEmail").value;
+  const password = document.getElementById("authPassword").value;
+  try {
+    if (currentAuthMode === "signin") {
+      await auth.signInWithEmailAndPassword(email, password);
+    } else {
+      await auth.createUserWithEmailAndPassword(email, password);
+    }
+    closeAuthModal();
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', { 'size': 'invisible' });
+
+async function handlePhoneSubmit(e) {
+  e.preventDefault();
+  const phone = "+91" + document.getElementById("authPhone").value;
+  const otpGroup = document.getElementById("otpGroup");
+  const submitBtn = document.getElementById("phoneSubmitBtn");
+  if (!confirmationResult) {
+    try {
+      confirmationResult = await auth.signInWithPhoneNumber(phone, window.recaptchaVerifier);
+      otpGroup.style.display = "block";
+      submitBtn.innerText = "Verify OTP";
+    } catch (err) {
+      alert(err.message);
+    }
+  } else {
+    const code = document.getElementById("authOtp").value;
+    try {
+      await confirmationResult.confirm(code);
+      closeAuthModal();
+    } catch (err) {
+      alert("Invalid OTP");
+    }
+  }
+}
+
+function handleLogout() {
+  auth.signOut();
+  const dropdown = document.getElementById("userDropdown");
+  if (dropdown) dropdown.style.display = "none";
+}
+
+function updateUserUI() {
+  const dropdown = document.getElementById("userDropdown");
+  if (!dropdown) return;
+
+  const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+  const modeText = isDark ? "☀️ Light Mode" : "🌙 Dark Mode";
+
+  if (authState.user) {
+    const emailStr = authState.user.email || authState.user.phoneNumber || "User";
+    const initial = emailStr.charAt(0).toUpperCase();
+    dropdown.innerHTML = `
+      <div class="user-dropdown-header">
+        <div class="mini-avatar">${initial}</div>
+        <div style="font-size:14px; font-weight:700; color:var(--text-primary); text-overflow:ellipsis; overflow:hidden;">${emailStr}</div>
+      </div>
+      <div class="dropdown-sep"></div>
+      <button class="dropdown-item" onclick="alert('Profile saving history feature active.')">👤 My Profile</button>
+      <button class="dropdown-item" onclick="toggleMode(); toggleUserMenu();">${modeText}</button>
+      <button class="dropdown-item" onclick="clearHistoryUI()">🗑️ Clear History</button>
+      <div class="dropdown-sep"></div>
+      <button class="dropdown-item" onclick="window.location.reload()">🔄 Refresh</button>
+      <button class="dropdown-item danger" onclick="handleLogout()">🚪 Logout</button>
+    `;
+  } else {
+    dropdown.innerHTML = `
+      <div class="user-dropdown-header">
+        <div style="font-size:14px; font-weight:700; color:var(--text-secondary);">Guest Mode (Active)</div>
+      </div>
+      <div class="dropdown-sep"></div>
+      <button class="dropdown-item primary-item" onclick="openAuthModal('signin'); toggleUserMenu();">🔑 Sign In</button>
+      <button class="dropdown-item" onclick="openAuthModal('signup'); toggleUserMenu();">📝 Sign Up</button>
+      <div class="dropdown-sep"></div>
+      <button class="dropdown-item" onclick="toggleMode(); toggleUserMenu();">${modeText}</button>
+      <button class="dropdown-item" onclick="alert('Settings feature coming soon')">⚙️ Settings</button>
+    `;
+  }
+}
+
+function clearHistoryUI() {
+  if (confirm("Are you sure you want to clear your local history?")) {
+    searchHistory = [];
+    localStorage.removeItem("searchHistory");
+    renderHistory();
+    alert("History cleared!");
+  }
+}
+
+auth.onAuthStateChanged((user) => {
+  if (user) {
+    authState.user = user;
+    authState.isGuest = false;
+    user.getIdToken().then(token => {
+      authState.sessionToken = token;
+      localStorage.setItem("sessionToken", token);
+    });
+    localStorage.setItem("authUser", JSON.stringify(user));
+  } else {
+    authState.user = null;
+    authState.isGuest = true;
+    authState.sessionToken = "";
+    localStorage.removeItem("sessionToken");
+    localStorage.removeItem("authUser");
+  }
+  updateUserUI();
+});
 
 // ── Header scroll effect ──
 window.addEventListener("scroll", () => {
@@ -177,6 +352,12 @@ function removeHistory(e, query) {
 }
 
 function saveHistory(query) {
+  // Only save history if user is logged in
+  if (!authState.user) {
+    console.log("Guest mode: history not saved.");
+    return;
+  }
+  
   query = query.trim();
   if (!query) return;
   searchHistory = searchHistory.filter(q => q !== query);
@@ -282,14 +463,75 @@ function toggleVoiceSearch() {
 }
 
 // ── Camera ──
-function openCameraPicker() { if (cameraInput) cameraInput.click(); }
+let scannerStream = null;
+let scannerActive = false;
+
+async function startLiveScan() {
+  const liveScanner = document.getElementById("liveScanner");
+  const video = document.getElementById("scannerVideo");
+  const status = document.getElementById("liveScanStatus");
+
+  try {
+    scannerStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+    video.srcObject = scannerStream;
+    liveScanner.style.display = "block";
+    scannerActive = true;
+    requestAnimationFrame(tick);
+    status.innerHTML = "🔍 Looking for QR Code...";
+  } catch (err) {
+    alert("Camera Error: " + err.message);
+  }
+}
+
+function stopLiveScan() {
+  if (scannerStream) {
+    scannerStream.getTracks().forEach(track => track.stop());
+    scannerStream = null;
+  }
+  scannerActive = false;
+  document.getElementById("liveScanner").style.display = "none";
+}
+
+function tick() {
+  if (!scannerActive) return;
+
+  const video = document.getElementById("scannerVideo");
+  const status = document.getElementById("liveScanStatus");
+
+  if (video.readyState === video.HAVE_ENOUGH_DATA) {
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
+
+    if (code) {
+      status.innerHTML = `✅ <b>FOUND:</b> ${code.data}`;
+      searchInput.value = code.data;
+      
+      // Visual Feedback
+      video.style.border = "4px solid var(--accent-green)";
+      
+      setTimeout(() => {
+        stopLiveScan();
+        search(1, false);
+      }, 500);
+      return;
+    }
+  }
+  requestAnimationFrame(tick);
+}
+
+function openImagePicker() { if (cameraInput) cameraInput.click(); }
 if (cameraInput) {
   cameraInput.addEventListener("change", async () => {
     const f = cameraInput.files?.[0];
     if (!f) return;
     
     attachedScan = f;
-    if (scanStatus) scanStatus.innerHTML = `⏳ Analyzing Image: <b>${f.name}</b>...`;
+    if (scanStatus) scanStatus.innerHTML = `⏳ Analyzing <b>${f.name}</b>...`;
 
     // 1. Try QR/Barcode Scan locally first
     try {
@@ -306,8 +548,19 @@ if (cameraInput) {
           const code = jsQR(imageData.data, imageData.width, imageData.height);
           
           if (code) {
-            if (scanStatus) scanStatus.innerHTML = `✅ <b>SCAN RESULT:</b> <a href="${code.data}" target="_blank" style="color:var(--neon-glow)">${code.data}</a>`;
+            const isUrl = code.data.startsWith("http://") || code.data.startsWith("https://");
+            if (scanStatus) {
+                scanStatus.innerHTML = `
+                    <div class="scan-result-card">
+                        <span class="scan-label">✅ QR Code Detected</span>
+                        <div class="scan-data">${code.data}</div>
+                        ${isUrl ? `<a href="${code.data}" target="_blank" class="scan-link-btn">Visit Website →</a>` : ''}
+                    </div>
+                `;
+            }
             searchInput.value = code.data;
+            // Trigger search automatically for immediate "output"
+            search(1, false);
           } else {
             // 2. If no QR, trigger Advanced Visual Search via backend
             triggerVisualSearch(f);
@@ -322,6 +575,7 @@ if (cameraInput) {
     }
   });
 }
+
 
 /** ── Triggering Advanced AI Visual Recognition ── **/
 async function triggerVisualSearch(file) {
@@ -444,12 +698,20 @@ function getSourceBadge(url, fallback = "Source") {
 // MAIN SEARCH
 // ═══════════════════════════════════════════
 async function search(pageNumber = 1, aiMode = false) {
-  let query = searchInput.value.trim();
+  let query = searchInput ? searchInput.value.trim() : "";
+  
+  // If no query in input, but we're on a non-first page, use activeQuery
+  if (!query && pageNumber > 1) {
+    query = activeQuery;
+  }
 
   if (!query) {
     resetToHome();
     return;
   }
+
+  // Update activeQuery on new search
+  if (pageNumber === 1) activeQuery = query;
 
   closeAutocomplete();
 
@@ -488,13 +750,14 @@ async function search(pageNumber = 1, aiMode = false) {
     }
 
     if (!res.ok) {
-      if (res.status === 401) {
-        openAuthModal();
-        setAuthMessage("Please login to use IndiaSearch.", true);
-        resultsBox.innerHTML = "";
-        if (paginationContainer) paginationContainer.innerHTML = "";
-        return;
-      }
+      // Auth check disabled for now
+      // if (res.status === 401) {
+      //   openAuthModal();
+      //   setAuthMessage("Please login to use IndiaSearch.", true);
+      //   resultsBox.innerHTML = "";
+      //   if (paginationContainer) paginationContainer.innerHTML = "";
+      //   return;
+      // }
       throw new Error(data.error || `Backend error (status ${res.status})`);
     }
 
@@ -741,6 +1004,14 @@ async function search(pageNumber = 1, aiMode = false) {
 
     window.scrollTo({ top: 0, behavior: "smooth" });
 
+    // ── Clear Search Boxes as per User Request ──
+    // "Answer aaye remove ho jay"
+    if (searchInput) searchInput.value = "";
+    if (aiSearchInput) {
+        aiSearchInput.value = "";
+        aiSearchInput.style.height = "auto";
+    }
+
   } catch (e) {
     const fallback = isLocalHost
       ? "Local backend not running on port 8000."
@@ -843,59 +1114,204 @@ function closeImageModal() {
   document.getElementById("downloadMenu").style.display = "none";
 }
 // ═══════════════════════════════════════════
-// FIREBASE & AUTH
+// ADVANCED AUTHENTICATION (LINK-BASED)
 // ═══════════════════════════════════════════
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: "AIzaSyAA13C5VErrxh8GLyoYMIUSvMpMBKCkZ98",
-  authDomain: "indiasearch-975e1.firebaseapp.com",
-  projectId: "indiasearch-975e1",
-  storageBucket: "indiasearch-975e1.firebasestorage.app",
-  messagingSenderId: "770251048171",
-  appId: "1:770251048171:web:35b6f1af9057259321eaae",
-  measurementId: "G-F17M30EDGG"
-};
-
-if (!firebase.apps.length) {
-  firebase.initializeApp(firebaseConfig);
-}
-
-const auth = firebase.auth();
-window.recaptchaVerifier = null;
-window.confirmationResult = null;
+let currentAuthToken = "";
 
 function setAuthMessage(msg, isError = false) {
+  const authMessage = document.getElementById("authMessage");
   if (!authMessage) return;
   authMessage.textContent = msg || "";
   authMessage.className = "auth-msg" + (msg ? (isError ? " error" : " success") : "");
 }
 
-function openAuthModal() {
+function openAuthModal(initialMode = 'signin') {
+  const authModal = document.getElementById("authModal");
   if (authModal) authModal.style.display = "flex";
-  document.getElementById("firebaseAuthForm").style.display = "grid";
-  document.getElementById("firebaseOtpForm").style.display = "none";
-  document.getElementById("firebaseEmailForm").style.display = "none";
+  switchAuthMode(initialMode);
 }
 
 function closeAuthModal() {
+  const authModal = document.getElementById("authModal");
   if (authModal) authModal.style.display = "none";
   setAuthMessage("");
 }
 
-function renderAuthState() {
-  if (authState.user && authState.sessionToken) {
-    if (authButton) authButton.style.display = "none";
-    if (userPill) userPill.style.display = "inline-flex";
-    const id = authState.user.identifier || authState.user.email || "";
-    if (userEmail) userEmail.textContent = id;
-    if (userAvatar) userAvatar.textContent = (id[0] || "U").toUpperCase();
-    closeAuthModal();
-  } else {
-    if (authButton) authButton.style.display = "none";
-    if (userPill) userPill.style.display = "none";
-    openAuthModal();
+function switchAuthMode(mode) {
+  const signinForm = document.getElementById("signinForm");
+  const signupForm = document.getElementById("signupForm");
+  const verifyForm = document.getElementById("verifySuccessForm");
+  const tabSignin = document.getElementById("tabSignin");
+  const tabSignup = document.getElementById("tabSignup");
+
+  if (!signinForm || !signupForm) return;
+
+  setAuthMessage("");
+  
+  if (mode === 'signin') {
+    signinForm.style.display = "grid";
+    signupForm.style.display = "none";
+    verifyForm.style.display = "none";
+    tabSignin.classList.add("active");
+    tabSignup.classList.remove("active");
+  } else if (mode === 'signup') {
+    signinForm.style.display = "none";
+    signupForm.style.display = "grid";
+    verifyForm.style.display = "none";
+    tabSignin.classList.remove("active");
+    tabSignup.classList.add("active");
+  } else if (mode === 'verify') {
+    signinForm.style.display = "none";
+    signupForm.style.display = "none";
+    verifyForm.style.display = "grid";
   }
 }
+
+async function submitSignin() {
+  const email = document.getElementById("loginEmail").value.trim();
+  const password = document.getElementById("loginPassword").value;
+  const captcha = document.getElementById("loginCaptcha").value.trim();
+
+  if (!email || !password || !captcha) {
+    setAuthMessage("Email, Password, and Captcha are required.", true);
+    return;
+  }
+
+  try {
+    setAuthMessage("Authenticating with IndiaSearch...");
+    const res = await fetch(`${API_BASE}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier: email, password, captcha_code: captcha })
+    });
+    
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Login failed");
+
+    authState.sessionToken = data.session_token;
+    authState.user = data.user;
+    localStorage.setItem("sessionToken", data.session_token);
+    localStorage.setItem("authUser", JSON.stringify(data.user));
+    
+    setAuthMessage("Login successful! Redirecting...", false);
+    setTimeout(() => {
+      renderAuthState();
+      closeAuthModal();
+      // Also close the dropdown if it was open
+      const dropdown = document.getElementById("userDropdown");
+      if (dropdown) dropdown.style.display = "none";
+    }, 800);
+  } catch (err) {
+    setAuthMessage(err.message, true);
+  }
+}
+
+async function requestSignupLink() {
+  const email = document.getElementById("signupEmail").value.trim();
+  if (!email || !email.includes("@")) {
+    setAuthMessage("Please enter a valid email address.", true);
+    return;
+  }
+
+  try {
+    setAuthMessage("Sending secure verification link...");
+    const res = await fetch(`${API_BASE}/auth/signup/request`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email })
+    });
+    
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Request failed");
+
+    // Simulator: Show the link for the user to "click"
+    currentAuthToken = data.debug_token;
+    document.getElementById("verifyEmailDisplay").value = email;
+    
+    setAuthMessage("Verification link generated! In a real scenario, this goes to your inbox.", false);
+    
+    // Add Simulation Button
+    const simDiv = document.createElement("div");
+    simDiv.style.marginTop = "15px";
+    simDiv.innerHTML = `
+      <button class="btn-primary full-w" style="background: #34a853; border-color: #34a853;" 
+              onclick="switchAuthMode('verify')">Simulate Email Link Click</button>
+    `;
+    document.getElementById("authMessage").appendChild(simDiv);
+
+  } catch (err) {
+    setAuthMessage(err.message, true);
+  }
+}
+
+async function completeSignupVerification() {
+  const password = document.getElementById("verifyPassword").value;
+  if (!password || password.length < 8) {
+    setAuthMessage("Password must be at least 8 characters for security.", true);
+    return;
+  }
+
+  try {
+    setAuthMessage("Finalizing your account...");
+    const res = await fetch(`${API_BASE}/auth/signup/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: currentAuthToken, password })
+    });
+    
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Setup failed");
+
+    authState.sessionToken = data.session_token;
+    authState.user = data.user;
+    localStorage.setItem("sessionToken", data.session_token);
+    localStorage.setItem("authUser", JSON.stringify(data.user));
+    
+    setAuthMessage("Account created successfully! Welcome to IndiaSearch.", false);
+    setTimeout(() => {
+      renderAuthState();
+      closeAuthModal();
+    }, 1000);
+  } catch (err) {
+    setAuthMessage(err.message, true);
+  }
+}
+
+function renderAuthState() {
+  const guestMenu = document.getElementById("guestMenu");
+  const loggedMenu = document.getElementById("loggedMenu");
+  const userEmail = document.getElementById("userEmail");
+  const userAvatarMini = document.getElementById("userAvatarMini");
+
+  if (authState.user && authState.sessionToken) {
+    if (guestMenu) guestMenu.style.display = "none";
+    if (loggedMenu) loggedMenu.style.display = "block";
+    
+    const id = authState.user.identifier || "";
+    if (userEmail) userEmail.textContent = id.split('@')[0];
+    if (userAvatarMini) userAvatarMini.textContent = (id[0] || "U").toUpperCase();
+    
+    closeAuthModal();
+  } else {
+    if (guestMenu) guestMenu.style.display = "block";
+    if (loggedMenu) loggedMenu.style.display = "none";
+  }
+}
+
+function toggleUserDropdown(e) {
+  if (e) e.stopPropagation();
+  const dropdown = document.getElementById("userDropdown");
+  if (!dropdown) return;
+  const isShown = dropdown.style.display === "flex" || dropdown.style.display === "block";
+  dropdown.style.display = isShown ? "none" : "flex";
+}
+
+window.addEventListener("click", () => {
+  const dropdown = document.getElementById("userDropdown");
+  if (dropdown && dropdown.style.display !== "none") {
+    dropdown.style.display = "none";
+  }
+});
 
 async function hydrateSession() {
   if (!authState.sessionToken) return;
@@ -910,156 +1326,6 @@ async function hydrateSession() {
     localStorage.removeItem("sessionToken"); localStorage.removeItem("authUser");
     authState = { sessionToken: "", user: null };
     renderAuthState();
-  }
-}
-
-function isPhoneNumber(val) {
-  return /^\+?\d{10,15}$/.test(val.replace(/[\s-]/g, ''));
-}
-
-async function requestFirebaseAuth() {
-  let val = document.getElementById("firebaseIdentifier").value.trim();
-  if (!val) {
-    setAuthMessage("Please enter email or mobile number.", true);
-    return;
-  }
-
-  if (isPhoneNumber(val)) {
-    if (!val.startsWith('+')) {
-      if (val.length === 10) val = '+91' + val; // Default to India if 10 digits
-      else { setAuthMessage("Please include country code, e.g., +91", true); return; }
-    }
-
-    // Setup recaptcha if not already set
-    if (!window.recaptchaVerifier) {
-      window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
-        'size': 'normal',
-        'callback': (response) => {
-          // reCAPTCHA solved, allow signInWithPhoneNumber.
-        }
-      });
-    }
-
-    try {
-      setAuthMessage("Sending OTP... Please verify reCAPTCHA if prompted.");
-      window.confirmationResult = await auth.signInWithPhoneNumber(val, window.recaptchaVerifier);
-      document.getElementById("firebaseAuthForm").style.display = "none";
-      document.getElementById("firebaseOtpForm").style.display = "grid";
-      setAuthMessage("OTP sent to your phone. Valid for 5 minutes.");
-    } catch (err) {
-      console.error(err);
-      setAuthMessage("Error sending OTP: " + err.message, true);
-    }
-  } else {
-    // Email Flow
-    document.getElementById("firebaseAuthForm").style.display = "none";
-    document.getElementById("firebaseEmailForm").style.display = "grid";
-    setAuthMessage("");
-  }
-}
-
-async function submitFirebaseOtp() {
-  const code = document.getElementById("firebaseOtpCode").value.trim();
-  if (!code) {
-    setAuthMessage("Please enter the OTP.", true);
-    return;
-  }
-
-  try {
-    setAuthMessage("Verifying...");
-    const result = await window.confirmationResult.confirm(code);
-    const token = await result.user.getIdToken();
-    await verifyTokenWithBackend(token);
-  } catch (err) {
-    setAuthMessage("Invalid OTP: " + err.message, true);
-  }
-}
-
-async function submitFirebaseEmail() {
-  const email = document.getElementById("firebaseIdentifier").value.trim();
-  const password = document.getElementById("firebaseEmailPassword").value;
-  if (!password) {
-    setAuthMessage("Password is required.", true);
-    return;
-  }
-
-  try {
-    setAuthMessage("Signing in...");
-    const userCredential = await auth.signInWithEmailAndPassword(email, password);
-    const token = await userCredential.user.getIdToken();
-    await verifyTokenWithBackend(token);
-  } catch (err) {
-    if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential' || err.code === 'auth/invalid-login-credentials') {
-      try {
-        setAuthMessage("Creating new account...");
-        const userCredential = await auth.createUserWithEmailAndPassword(email, password);
-        await userCredential.user.sendEmailVerification();
-        setAuthMessage("Wait... verification email sent. Proceeding to login...");
-        const token = await userCredential.user.getIdToken();
-        await verifyTokenWithBackend(token);
-      } catch (signupErr) {
-        setAuthMessage(signupErr.message, true);
-      }
-    } else {
-      setAuthMessage(err.message, true);
-    }
-  }
-}
-
-function togglePasswordVisibility(inputId, btn) {
-  const inp = document.getElementById(inputId);
-  if (!inp || !btn) return;
-  const showing = inp.type === "text";
-  inp.type = showing ? "password" : "text";
-  btn.textContent = showing ? "Show" : "Hide";
-}
-
-async function sendResetEmail() {
-  const email = document.getElementById("firebaseIdentifier").value.trim();
-  if (!email || !email.includes("@")) {
-    setAuthMessage("Please enter your email in the identifier field first.", true);
-    return;
-  }
-  try {
-    setAuthMessage("Sending reset link...");
-    await auth.sendPasswordResetEmail(email);
-    setAuthMessage("Password reset link sent to your email!", false);
-  } catch (err) {
-    setAuthMessage(err.message, true);
-  }
-}
-
-function toggleUserDropdown(e) {
-  if (e) e.stopPropagation();
-  const dropdown = document.getElementById("userDropdown");
-  if (!dropdown) return;
-  const isShown = dropdown.style.display === "flex";
-  dropdown.style.display = isShown ? "none" : "flex";
-}
-
-// Close dropdown when clicking outside
-window.addEventListener("click", () => {
-  const dropdown = document.getElementById("userDropdown");
-  if (dropdown && dropdown.style.display === "flex") {
-    dropdown.style.display = "none";
-  }
-});
-
-async function verifyTokenWithBackend(firebaseToken) {
-  try {
-    const res = await apiJsonRequest("/auth/firebase-login", { id_token: firebaseToken });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Login failed via backend.");
-
-    authState.sessionToken = data.session_token;
-    authState.user = data.user;
-    localStorage.setItem("sessionToken", data.session_token);
-    localStorage.setItem("authUser", JSON.stringify(data.user));
-    renderAuthState();
-    closeAuthModal();
-    setAuthMessage("Login Successful!", false);
-  } catch (err) {
-    setAuthMessage(err.message, true);
   }
 }
 
@@ -1114,11 +1380,20 @@ function useProfileHistory(query, aiMode = false) {
   search(1, aiMode);
 }
 
-async function logoutUser() {
+async function logout() {
   try {
-    if (authState.sessionToken) await apiJsonRequest("/auth/logout", { session_token: authState.sessionToken });
-  } catch { }
-  localStorage.removeItem("sessionToken"); localStorage.removeItem("authUser");
+    if (authState.sessionToken) {
+      await fetchWithApiFallback("/auth/logout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_token: authState.sessionToken }),
+      });
+    }
+  } catch (err) {
+    console.warn("Logout request failed:", err);
+  }
+  localStorage.removeItem("sessionToken");
+  localStorage.removeItem("authUser");
   authState = { sessionToken: "", user: null };
   renderAuthState();
   closeProfileModal();
@@ -1272,3 +1547,6 @@ document.addEventListener("DOMContentLoaded", () => {
   hydrateSession();
   initHomeWidgets();
 });
+// Final Initialization
+updateUserUI();
+

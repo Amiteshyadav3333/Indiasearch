@@ -6,6 +6,11 @@ Run this once to create the index
 
 import os
 from elasticsearch import Elasticsearch
+from dotenv import load_dotenv
+
+# Load .env file
+load_dotenv()
+
 
 # Elasticsearch credentials
 ELASTIC_URL = os.getenv("ELASTIC_URL")

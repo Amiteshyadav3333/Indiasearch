@@ -17,19 +17,23 @@ from fastapi import UploadFile, File, Form
 # In-memory store for PDF content (can be cleared periodically or linked to sessions)
 PDF_STORE = {} 
 
-load_dotenv(override=True)
-
-# Create a FastAPI app instance (assuming it's already there elsewhere, but let's check)
-# Actually, I'll just ensure NEWS_API_KEY is refreshed properly.
+# Look for .env in the current directory, or in the parent directory of this file
+DOTENV_PATH = os.path.join(os.path.dirname(__file__), "..", "..", ".env")
+load_dotenv(DOTENV_PATH, override=True)
+if not os.getenv("ELASTIC_URL"):
+    # Fallback for when run from within the Indiasearch folder
+    load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"), override=True)
 
 FIREBASE_PROJECT_ID = os.getenv("FIREBASE_PROJECT_ID", "indiasearch-975e1")
 FIREBASE_CREDS_JSON = os.getenv("FIREBASE_CREDENTIALS")
 WEATHER_API_KEY = os.getenv("whether_API_KEY") 
 NEWS_API_KEY = os.getenv("apikey") 
+NEWS_API_KEY_SECONDARY = os.getenv("Grok_api_key") # Grok use for news summary
 CRICKET_API_KEY = os.getenv("cricketdata_API_KEY") 
 STOCK_API_KEY = os.getenv("ALPHAVANTAGE_API_KEY") 
 GROQ_API_KEY = os.getenv("Grok_api_key") 
-FIREBASE_CREDS_FILE = os.path.join(os.path.dirname(__file__), "firebase-credentials.json")
+FIREBASE_CREDS_FILE = os.path.join(os.path.dirname(__file__), "..", "firebase-credentials.json")
+
 
 # Initialize Firebase via service account if possible, else use project ID
 if not firebase_admin._apps:
@@ -73,15 +77,29 @@ from fastapi.middleware.cors import CORSMiddleware
 from elasticsearch import Elasticsearch
 from bs4 import BeautifulSoup
 import time
+from datetime import datetime
+import base64
 
 try:
-    from . import ai_summary, search as search_module, translator
-    from . import auth_store
+    from app.services import ai_service as ai_summary
+    from app.services import search_service as search_module
+    from app.services.search_manager import run_parallel_pipeline
+    from app.services.api_quota_manager import APIQuotaManager
+    from app.utils import translator
+    from app.models import user as auth_store
 except ImportError:
-    import ai_summary
-    import search as search_module
-    import translator
-    import auth_store
+    try:
+        from . import ai_summary, search as search_module, translator
+        from . import auth_store
+        run_parallel_pipeline = None
+        APIQuotaManager = None
+    except ImportError:
+        import ai_summary
+        import search as search_module
+        import translator
+        import auth_store
+        run_parallel_pipeline = None
+        APIQuotaManager = None
 
 app = FastAPI()
 auth_store.init_db()
@@ -147,9 +165,17 @@ class SignupVerifyPayload(BaseModel):
     otp_code: str
     password: str
 
+class SignupRequestPayload(BaseModel):
+    email: str
+
+class SignupVerifyPayload(BaseModel):
+    token: str
+    password: str
+
 class LoginPayload(BaseModel):
     identifier: str
     password: str
+    captcha_code: str # Advanced security requirement
 
 class IdentifierPayload(BaseModel):
     identifier: str
@@ -273,45 +299,42 @@ async def health():
     return {"status": "ok"}
 
 
-@app.post("/auth/request-signup-otp")
-async def request_signup_otp(payload: SignupRequestPayload):
+@app.post("/auth/signup/request")
+async def signup_request(payload: SignupRequestPayload):
     try:
-        identifier, id_type = normalize_and_validate_identifier(payload.identifier)
+        email, _ = normalize_and_validate_identifier(payload.email)
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
-
-    if auth_store.get_user_by_identifier(identifier):
-        return JSONResponse({"error": "An account with this identifier already exists."}, status_code=400)
-
-    otp_data = issue_otp(identifier, id_type, "signup_verification", "Your IndiaSearch verification code")
+    
+    if auth_store.get_user_by_identifier(email):
+        return JSONResponse({"error": "An account with this email already exists."}, status_code=400)
+    
+    token = auth_store.create_verification_token(email)
+    # Simulator: In a real app, this sends an actual email.
     return {
-        "message": f"Verification code sent to {identifier}.",
-        "identifier": identifier,
-        "dev_otp": otp_data["otp_code"] if otp_data["sms_result"]["dev_mode"] else None,
+        "message": "Verification link sent to your email.",
+        "debug_token": token,
+        "verification_link": f"/auth/verify?token={token}"
     }
 
-
-@app.post("/auth/verify-and-signup")
-async def verify_and_signup(payload: SignupVerifyPayload):
-    try:
-        identifier, id_type = normalize_and_validate_identifier(payload.identifier)
-    except ValueError as e:
-        return JSONResponse({"error": str(e)}, status_code=400)
-
+@app.post("/auth/signup/verify")
+async def signup_verify(payload: SignupVerifyPayload):
+    email = auth_store.verify_token_and_get_email(payload.token)
+    if not email:
+        return JSONResponse({"error": "Invalid or expired verification link."}, status_code=400)
+    
     if len(payload.password) < 8:
         return JSONResponse({"error": "Password must be at least 8 characters long."}, status_code=400)
-
-    if auth_store.get_user_by_identifier(identifier):
-        return JSONResponse({"error": "An account with this identifier already exists."}, status_code=400)
-
-    if not auth_store.verify_otp(identifier, payload.otp_code, purpose="signup_verification"):
-        return JSONResponse({"error": "Invalid or expired OTP."}, status_code=400)
-
-    auth_store.create_user(identifier, id_type, payload.password)
-    user = auth_store.get_user_by_identifier(identifier)
+    
+    # Create user and delete token
+    auth_store.create_user(email, "email", payload.password)
+    auth_store.delete_verification_token(payload.token)
+    
+    user = auth_store.get_user_by_identifier(email)
     session_token = auth_store.create_session(user["id"])
+    
     return {
-        "message": "Account created successfully.",
+        "message": "Account verified and created successfully.",
         "session_token": session_token,
         "user": public_user(user)
     }
@@ -319,6 +342,10 @@ async def verify_and_signup(payload: SignupVerifyPayload):
 
 @app.post("/auth/login")
 async def login(payload: LoginPayload):
+    # Professional Captcha Simulation
+    if payload.captcha_code.lower() != "india":
+        return JSONResponse({"error": "Invalid security captcha. Hint: The answer is 'india'."}, status_code=400)
+
     try:
         identifier, id_type = normalize_and_validate_identifier(payload.identifier)
     except ValueError as e:
@@ -326,7 +353,7 @@ async def login(payload: LoginPayload):
 
     user = auth_store.get_user_by_identifier(identifier)
     if not user or not auth_store.verify_password(payload.password, user["password_hash"]):
-        return JSONResponse({"error": "Invalid credentials."}, status_code=401)
+        return JSONResponse({"error": "Invalid credentials. Please check your email and password."}, status_code=401)
 
     session_token = auth_store.create_session(user["id"])
     return {
@@ -450,7 +477,6 @@ async def fetch_realtime_news(query: str):
             async with session.get(url, params=params, timeout=12) as resp:
                 logger.info(f"News API status: {resp.status}")
                 data = await resp.json()
-                # logger.info(f"News API response sample: {str(data)[:500]}") # Avoid too much logging
                 if data.get("status") == "success":
                     results = data.get("results", [])
                     for item in results:
@@ -550,6 +576,7 @@ async def fetch_cricket_live_score():
     except Exception as e:
         logger.error(f"CricketData API Fetch Error: {e}")
     return None
+
 async def fetch_stock_data(query: str):
     """Fetches real-time stock/index data from Alpha Vantage"""
     if not STOCK_API_KEY:
@@ -599,7 +626,6 @@ async def fetch_stock_data(query: str):
         logger.error(f"AlphaVantage Fetch Error: {e}")
     return None
 
-import base64
 
 @app.post("/visual-search")
 async def visual_search(file: UploadFile = File(...), session_token: str | None = Form(None)):
@@ -641,9 +667,6 @@ async def upload_pdf(file: UploadFile = File(...), session_token: str | None = F
     except Exception as e:
         logger.error(f"PDF ERROR: {e}")
         return JSONResponse({"error": f"Failed to read PDF: {str(e)}"}, status_code=500)
-    except Exception as e:
-        logger.error(f"PDF ERROR: {e}")
-        return JSONResponse({"error": f"Failed to read PDF: {str(e)}"}, status_code=500)
 
 @app.get("/search")
 async def search(q: str, page: int = 1, filter: str = "all", ai_mode: bool = False, session_token: str | None = None):
@@ -661,19 +684,8 @@ async def search(q: str, page: int = 1, filter: str = "all", ai_mode: bool = Fal
     sports_keywords = ["score", "live cricket", "cricket live", "match", "ipl", "t20", "world cup", "football score", "match live"]
     is_sports_intent = any(k in translated_lower for k in sports_keywords)
     
-    # Stock Intent
     stock_keywords = ["stock", "nifty", "sensex", "price", "share", "market", "nasdaq", "dow", "reliance share"]
     is_stock_intent = any(k in translated_lower for k in stock_keywords)
-    
-    # Enforce Auth EXCEPT for News/Sports/Stocks OR Ask AI (to allow guests to chat with PDF/Knowledge)
-    is_public = is_news_intent or is_sports_intent or is_stock_intent or filter == "askAI"
-    if not is_public:
-        if not session_token:
-            return JSONResponse({"error": "Authentication required. Please login or signup to use IndiaSearch."}, status_code=401)
-            
-        user = auth_store.get_user_by_session(session_token)
-        if not user:
-            return JSONResponse({"error": "Authentication required. Please login or signup to use IndiaSearch."}, status_code=401)
     
     if is_news_intent:
         filter = "news"
@@ -681,8 +693,8 @@ async def search(q: str, page: int = 1, filter: str = "all", ai_mode: bool = Fal
     logger.info(f"SEARCH ROUTE HIT: q={q}, page={page}, filter={filter}, ai_mode={ai_mode}")
     
     cache_key = f"{q}_page_{page}_filter_{filter}_ai_{ai_mode}"
-    # === CACHE CHECK ===
-    if cache_key in QUERY_CACHE:
+    # === CACHE CHECK (fast path for non-pipeline filters) ===
+    if filter not in ("all", "askAI") and cache_key in QUERY_CACHE:
         if time.time() - QUERY_CACHE[cache_key]['time'] < CACHE_TTL:
             logger.info(f"🚀 FAST RESPONSE FROM CACHE: {cache_key}")
             return QUERY_CACHE[cache_key]['data']
@@ -690,12 +702,28 @@ async def search(q: str, page: int = 1, filter: str = "all", ai_mode: bool = Fal
     try:
         search_warning = None
         search_suggestions = []
-        
-        # Initialize variables
         weather_data = None
         
-        if filter == "all":
-            results, total_hits = await search_module.search_query(es, INDEX, translated, page)
+        if filter in ("all", "askAI"):
+            # ══════════════════════════════════════════════════════
+            # 🔥 NEW PARALLEL PIPELINE
+            # Cache → Elastic → DDG+Yahoo (2.5s) → API fallback
+            # ══════════════════════════════════════════════════════
+            if filter == "askAI":
+                ai_mode = True
+
+            if run_parallel_pipeline is not None:
+                pipeline_result = await run_parallel_pipeline(translated, page=page, lang=lang)
+                results      = pipeline_result["results"]
+                total_hits   = pipeline_result["total"]
+                quota_status = pipeline_result.get("quota_status", {})
+                logger.info(
+                    f"[Pipeline] sources={pipeline_result.get('sources_used')}, "
+                    f"took={pipeline_result.get('took_ms')}ms, "
+                    f"quota_remaining={quota_status.get('remaining', 'N/A')}"
+                )
+            else:
+                results, total_hits = await search_module.search_query(es, INDEX, translated, page)
         elif filter == "images":
             results, total_hits = await search_module.global_image_search(translated, page)
             if results and any("Fallback Preview" in str(item.get("snippet", "")) for item in results):
@@ -759,11 +787,8 @@ async def search(q: str, page: int = 1, filter: str = "all", ai_mode: bool = Fal
         
         if found_keyword:
             # Better extraction: remove the exact keyword and common filler words
-            # e.g., "weather in haridwar" -> "haridwar"
             clean_q = q_lower
-            # Remove "current", "live" if present
             for filler in ["weather", "temperature", "temprature", "temp", "mausam", "in", "at", "current", "live"]:
-                # Use word boundaries or just replace with space to avoid "haridwar rature" issue
                 clean_q = re.sub(rf'\b{filler}\b', '', clean_q)
             
             clean_q = re.sub(r'\s+', ' ', clean_q).strip()
@@ -864,3 +889,11 @@ async def read_article(url: str):
     except Exception as e:
         logger.error(f"Read Article Error: {str(e)}")
         return {"error": "Publisher blocking direct access."}
+
+
+@app.get("/api/quota")
+async def get_api_quota():
+    """Check daily API call quota status (100 calls/day limit)."""
+    if APIQuotaManager is not None:
+        return APIQuotaManager.status()
+    return {"error": "Quota manager not loaded", "limit": 100}
