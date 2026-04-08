@@ -23,62 +23,43 @@ SESSION_TTL_SECONDS = 60 * 60 * 24 * 14  # 14 days
 def get_conn():
     """
     Return a new PostgreSQL connection.
-    Uses DATABASE_URL env var (Railway / Supabase / Neon / local).
+    Safe parameter parsing for special characters.
     """
     if not DATABASE_URL:
         raise RuntimeError("DATABASE_URL is not set.")
     
-    # Try 1: Direct connection as DSN (psycopg2 handles some encoding)
+    # Try parsing manually first to handle @ in passwords
     try:
-        if "%" not in DATABASE_URL: # If not encoded, literal might fail in DSN if @ is present
-             pass # Skip to manual parse if literal @ exists
-        else:
-             return psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
-    except:
-        pass
-
-    # Try 2: Manual robust parsing for Supabase/Railway-style URLs
-    try:
-        url_to_parse = DATABASE_URL
-        if url_to_parse.startswith("postgresql://"):
-            url_to_parse = url_to_parse[len("postgresql://"):]
+        url = DATABASE_URL
+        if url.startswith("postgresql://"):
+            url = url[len("postgresql://"):]
         
-        # Split at the LAST '@' for host vs credentials
-        if '@' in url_to_parse:
-            creds, rest = url_to_parse.rsplit('@', 1)
-            
-            # Username/Password
-            if ':' in creds:
-                username, password = creds.split(':', 1)
-            else:
-                username, password = creds, None
-            
-            # Host/DB
-            if '/' in rest:
-                host_port, database = rest.split('/', 1)
-            else:
-                host_port, database = rest, "postgres"
-            
-            # Host/Port
-            if ':' in host_port:
-                host, port = host_port.split(':', 1)
-            else:
-                host, port = host_port, "5432"
+        if '@' in url:
+            creds, rest = url.rsplit('@', 1)
+            username, password = creds.split(':', 1) if ':' in creds else (creds, None)
+            host_port, database = rest.split('/', 1) if '/' in rest else (rest, "postgres")
+            host, port = host_port.split(':', 1) if ':' in host_port else (host_port, "5432")
 
-            # UNQUOTE both to handle %40, %23 etc
+            u_name = unquote(username)
+            u_pass = unquote(password) if password else None
+            u_db = unquote(database)
+            
+            # Detailed logging (Masked)
+            print(f"Connecting to DB: host={host}, port={port}, user={u_name}, db={u_db}")
+            
             return psycopg2.connect(
-                database=unquote(database),
-                user=unquote(username),
-                password=unquote(password) if password else None,
+                database=u_db,
+                user=u_name,
+                password=u_pass,
                 host=host,
                 port=port,
                 cursor_factory=psycopg2.extras.RealDictCursor,
-                connect_timeout=10 # Avoid long hangs
+                connect_timeout=10
             )
     except Exception as e:
         print(f"DATABASE PARSING ERROR: {e}")
         
-    # Final Fallback: Just let psycopg2 try its best
+    # Fallback to direct DSN
     return psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
 
 
