@@ -22,20 +22,26 @@ SESSION_TTL_SECONDS = 60 * 60 * 24 * 14  # 14 days
 
 def get_conn():
     """
-    Highly robust PostgreSQL connection logic using regex to handle 
-    passwords with special characters (@, #) correctly.
+    Highly robust PostgreSQL connection logic.
+    Handles both postgres:// and postgresql:// URL schemes.
+    Handles passwords with special characters (@, #, &, +) correctly.
     """
     if not DATABASE_URL:
         raise RuntimeError("DATABASE_URL is not set.")
     
-    clean_url = DATABASE_URL.strip().strip('"').strip("'")
+    raw = DATABASE_URL.strip().strip('"').strip("'")
     
-    # Regex to capture: postgresql://[user]:[pass]@[host]:[port]/[db]
-    # Regex to capture: postgresql://[user]:[pass]@[host]:[port]/[db]?params
-    # This captures everything up to the? for the database name
-    import re
-    pattern = r"postgresql://([^:]+):(.+?)@([^:/]+):?(\d*)?/([^?]+)"
-    match = re.match(pattern, clean_url)
+    # Normalize: Railway uses postgres://, psycopg2 needs postgresql://
+    normalized = raw.replace("postgres://", "postgresql://", 1)
+    
+    # Strip query params before regex parsing to avoid special chars in params
+    # being confused with password chars
+    base_url = normalized.split("?")[0]
+    
+    # Regex: postgresql://[user]:[pass]@[host]:[port]/[db]
+    # Password is captured lazily (.+?) to stop at last @ before host
+    pattern = r"postgresql://([^:]+):(.+)@([^:@/]+):?(\d*)?/([^?]+)"
+    match = re.match(pattern, base_url)
     
     if match:
         user, password, host, port, db = match.groups()
@@ -54,19 +60,31 @@ def get_conn():
             print(f"DB CONNECTION ERROR (Parsed): {e}")
             raise e
 
-    # Fallback to direct connection if regex doesn't match
-    raise ValueError(f"Could not parse DATABASE_URL correctly. Check formatting.")
+    # Fallback: try direct DSN
+    try:
+        return psycopg2.connect(raw, cursor_factory=psycopg2.extras.RealDictCursor)
+    except Exception as e:
+        raise ValueError(f"Could not parse DATABASE_URL: {e}")
+
+
 
 
 def init_db():
     """
     Create all tables if they don't exist.
     Safe to call on every startup (uses IF NOT EXISTS).
-    PostgreSQL differences from SQLite:
-      - SERIAL instead of INTEGER PRIMARY KEY AUTOINCREMENT
-      - %s placeholders instead of ?
+    NON-FATAL: If DB is temporarily unavailable, logs warning and continues.
+    App will retry on actual requests.
     """
-    conn = get_conn()
+    import logging
+    logger = logging.getLogger("IndiasearchDB")
+    
+    try:
+        conn = get_conn()
+    except Exception as e:
+        logger.warning(f"⚠️  DB init skipped (will retry on requests): {e}")
+        return  # Non-fatal — app starts anyway
+    
     try:
         with conn.cursor() as cur:
             cur.execute(
