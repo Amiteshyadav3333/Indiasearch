@@ -923,13 +923,15 @@ async function search(pageNumber = 1, aiMode = false) {
         translateText("Visit Website", targetLang)
       ]);
 
-      const isNews = (currentFilter === "news") || (data.is_news_routing === true);
+      // News detection: either filter is news OR item has is_news flag
+      const isNews = (currentFilter === "news") || item.is_news === true;
       const isImages = currentFilter === "images";
       let host = item.url;
       try { host = new URL(item.url).hostname.replace(/^www\./, ""); } catch { }
+      const sourceName = getSourceBadge(item.url, host);
 
       if (aiMode) {
-        return ""; // In true AI Mode, don't show normal results or source strips
+        return ""; // In true AI Mode, don't show normal results
       }
 
       if (isImages) {
@@ -948,24 +950,49 @@ async function search(pageNumber = 1, aiMode = false) {
           </div>`;
       }
 
-      const newsImageHtml = (isNews && item.image) ? `<img src="${item.image}" class="news-snapshot" alt="news" onerror="this.style.display='none'">` : '';
+      // ── PREMIUM NEWS CARD with Image ──
+      if (isNews) {
+        const hasImg = item.image && item.image.length > 5;
+        return `
+          <div class="news-card-premium" onclick="window.open('${item.url}', '_blank')">
+            ${hasImg ? `
+              <div class="news-card-img-wrap">
+                <img src="${item.image}" alt="${tt}" class="news-card-img" loading="lazy"
+                     onerror="this.parentElement.style.display='none'">
+              </div>` : `
+              <div class="news-card-img-wrap news-card-no-img">
+                <span style="font-size:36px;">📰</span>
+              </div>`}
+            <div class="news-card-body">
+              <div class="news-card-meta">
+                <span class="news-source-chip">${sourceName}</span>
+                <span class="news-dot">·</span>
+                <span class="news-card-host">${host}</span>
+              </div>
+              <h3 class="news-card-title">${tt}</h3>
+              <p class="news-card-snippet">${ts.substring(0, 130)}${ts.length > 130 ? '…' : ''}</p>
+              <div class="news-card-footer">
+                <button class="read-here-btn news-read-btn" onclick="event.stopPropagation(); readArticle(event,'${item.url}',${i})">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a4 4 0 0 1-4-4V6"/></svg>
+                  Read Here
+                </button>
+                <a href="${item.url}" target="_blank" class="news-open-link" onclick="event.stopPropagation()">Open →</a>
+              </div>
+              <div id="article-inline-${i}" style="display:none;" onclick="event.stopPropagation()"></div>
+            </div>
+          </div>`;
+      }
 
+      // ── Standard Web Result ──
       return `
         <div class="result-item">
-          ${newsImageHtml}
           <div class="result-site-line">
             <div class="result-favicon">🌐</div>
             <span class="result-host">${host}</span>
           </div>
-          <a href="${item.url}" ${isNews ? "" : 'target="_blank"'} ${isNews ? `onclick="readArticle(event,'${item.url}',${i})"` : ""} class="result-title">${tt}</a>
+          <a href="${item.url}" target="_blank" class="result-title">${tt}</a>
           <p class="result-snippet">${ts}</p>
-          ${isNews
-          ? `<button class="read-here-btn" onclick="readArticle(event,'${item.url}',${i})">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a4 4 0 0 1-4-4V6"/></svg>
-                Read Here
-              </button>
-              <div id="article-inline-${i}" style="display:none;"></div>`
-          : `<a href="${item.url}" target="_blank" class="read-here-btn">${visitT} →</a>`}
+          <a href="${item.url}" target="_blank" class="read-here-btn">${visitT} →</a>
         </div>`;
     });
 
@@ -977,9 +1004,12 @@ async function search(pageNumber = 1, aiMode = false) {
     } else if (currentFilter === "images") {
       resultsBox.innerHTML = `<div class="image-grid">${htmlItems.join("")}</div>`;
       renderPagination(data.total_hits || 0, pageNumber);
+    } else if (currentFilter === "news") {
+      resultsBox.innerHTML = `<div class="news-grid-premium">${htmlItems.join("")}</div>`;
+      renderPagination(data.total || 0, pageNumber);
     } else {
       resultsBox.innerHTML = htmlItems.join("");
-      renderPagination(data.total_hits || 0, pageNumber);
+      renderPagination(data.total || 0, pageNumber);
     }
 
     window.scrollTo({ top: 0, behavior: "smooth" });
