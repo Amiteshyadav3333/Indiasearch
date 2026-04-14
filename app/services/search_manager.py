@@ -15,7 +15,7 @@ import re
 from datetime import datetime
 
 from app.cache.cache_manager import CacheManager, SEARCH_TTL
-from app.integrations import duckduckgo_client, yahoo_client, api_client
+from app.integrations import duckduckgo_client, yahoo_client, api_client, google_client, wiki_client
 from app.integrations.elastic_client import ElasticClient
 from app.services import (
     merge_service, 
@@ -67,6 +67,48 @@ async def identify_intent(query: str) -> str:
         return "finance"
     
     return "general"
+
+def get_direct_hit(query: str) -> list:
+    """
+    Returns a 'Direct Hit' result if the query looks like a domain or major brand.
+    """
+    q = query.lower().strip()
+    
+    # Common TLDs to detect domains (more robust regex)
+    if re.search(r"\.[a-z]{2,12}$", q) or q.startswith("www."):
+        clean_domain = q.replace("www.", "")
+        name = clean_domain.split(".")[0].capitalize()
+        url = q if q.startswith("http") else f"https://{q}"
+        return [{
+            "title": f"{name} - Official Site",
+            "url": url,
+            "snippet": f"Visit {clean_domain} directly. This matches your exact domain search.",
+            "source": "direct_hit",
+            "_boost": 10
+        }]
+    
+    # Major Brands
+    brands = {
+        "google": "https://www.google.com",
+        "instagram": "https://www.instagram.com",
+        "facebook": "https://www.facebook.com",
+        "youtube": "https://www.youtube.com",
+        "twitter": "https://www.twitter.com",
+        "x": "https://www.twitter.com",
+        "linkedin": "https://www.linkedin.com",
+        "indiasearch": "https://indiasearch.site",
+    }
+    
+    if q in brands:
+        return [{
+            "title": f"{q.capitalize()} - Official Website",
+            "url": brands[q],
+            "snippet": f"Navigate to the official {q.capitalize()} platform.",
+            "source": "direct_hit",
+            "_boost": 10
+        }]
+        
+    return []
 
 async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", lang: str = "en", force_ai: bool = False, pdf_content: str = None) -> dict:
     """
@@ -123,6 +165,12 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
         
         # 3. Yahoo (Free Web)
         tasks.append(asyncio.create_task(yahoo_client.search(en_query, max_results=MAX_WEB_RESULTS)))
+
+        # 4. Google (Scraper)
+        tasks.append(asyncio.create_task(google_client.search(en_query, max_results=MAX_WEB_RESULTS)))
+
+        # 5. Wikipedia (Reliable)
+        tasks.append(asyncio.create_task(wiki_client.search(en_query, max_results=5)))
     
         # 4. News API (If News Intent)
         if intent == "news":
@@ -136,6 +184,13 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
     done, pending = await asyncio.wait(tasks, timeout=PARALLEL_TIMEOUT)
     
     search_collections = []
+    
+    # ── Level 2.5: Direct Hit Detection ───────────────────
+    direct_hits = get_direct_hit(en_query)
+    if direct_hits:
+        search_collections.append(direct_hits)
+        sources_used.append("direct_hit")
+
     for task in done:
         try:
             res = await task

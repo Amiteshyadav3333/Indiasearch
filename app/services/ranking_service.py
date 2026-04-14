@@ -16,7 +16,10 @@ logger = logging.getLogger(__name__)
 
 # Higher = better source priority
 SOURCE_WEIGHTS = {
-    "elasticsearch": 1.5,
+    "direct_hit":     5.0,  # Intentional navigation always wins
+    "elasticsearch":  1.5,
+    "google":         1.4,
+    "wikipedia":      1.3,
     "duckduckgo":    1.2,
     "yahoo":         1.0,
     "serpapi":       0.9,   # paid API ironically ranks lower (last resort)

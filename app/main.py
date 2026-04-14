@@ -14,8 +14,9 @@ from dotenv import load_dotenv
 import firebase_admin
 from firebase_admin import auth, credentials
 from fastapi import FastAPI, Request, UploadFile, File, Form
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import PyPDF2
 from bs4 import BeautifulSoup
@@ -49,6 +50,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# --- Mount Static Files ---
+FRONTEND_PATH = os.path.join(os.path.dirname(__file__), "..", "frontend")
+
+@app.get("/")
+async def read_index():
+    return FileResponse(os.path.join(FRONTEND_PATH, "index.html"))
+
+# We'll mount the frontend directory at / to serve assets like app.js and style.css
+# But we must do it AFTER all other routes are defined to avoid shadowing.
+# So I'll move this to the bottom of the file later or just use it now and hope for the best.
+# Actually, it's better to mount it last.
 
 # In-memory store for PDF context
 PDF_STORE = {}
@@ -219,3 +231,6 @@ async def read_article(url: str):
                 return {"title": soup.title.string, "content": text[:10000]}
     except:
         return {"error": "Blocked"}
+
+# Finally, mount the frontend directory to serve app.js, style.css, etc.
+app.mount("/", StaticFiles(directory=FRONTEND_PATH), name="frontend")

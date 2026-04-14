@@ -35,24 +35,46 @@ def _yahoo_sync_search(query: str, max_results: int = 10) -> list:
 
         url = f"https://search.yahoo.com/search?p={query}&n={max_results}"
         headers = random.choice(_HEADERS_POOL)
+        # Force a fresh User-Agent
+        headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        
         resp = requests.get(url, headers=headers, timeout=5)
         soup = BeautifulSoup(resp.text, "html.parser")
 
         results = []
-        for tag in soup.select("div.algo"):
-            a = tag.select_one("h3 a") or tag.select_one("a.ac-algo")
-            desc = tag.select_one("p.fz-ms") or tag.select_one(".compText p")
-            if not a:
-                continue
+        # Try multiple result containers
+        items = soup.select("div.algo") or soup.select(".dd.algo") or soup.select(".res")
+        
+        for tag in items:
+            # Flexible selectors for title and link
+            a = tag.select_one("h3 a") or tag.select_one("a.ac-algo") or tag.select_one("a")
+            # Clearer link extraction
+            if not a: continue
+            
+            title = a.get_text(strip=True)
             raw_url = a.get("href", "")
-            # Yahoo wraps URLs in redirects — extract real URL
-            m = re.search(r"https?://[^&]+", raw_url)
-            clean_url = m.group(0) if m else raw_url
+            
+            # Extract snippet
+            desc = tag.select_one(".compText") or tag.select_one(".fz-ms") or tag.select_one(".st") or tag.select_one("p")
+            snippet = desc.get_text(strip=True) if desc else ""
+
+            if not raw_url or "yahoo.com" in raw_url and "/RK=" in raw_url:
+                # Handle Yahoo redirect URLs
+                m = re.search(r"RU=([^/&]+)", raw_url)
+                if m:
+                    import urllib.parse
+                    clean_url = urllib.parse.unquote(m.group(1))
+                else:
+                    clean_url = raw_url
+            else:
+                clean_url = raw_url
+
+            if not title or not clean_url: continue
 
             results.append({
-                "title":   a.get_text(strip=True),
+                "title":   title,
                 "url":     clean_url,
-                "snippet": desc.get_text(strip=True) if desc else "",
+                "snippet": snippet,
                 "source":  "yahoo",
             })
             if len(results) >= max_results:

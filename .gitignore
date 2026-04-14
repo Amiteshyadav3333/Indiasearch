@@ -56,3 +56,4 @@ dump.rdb
 .cache/
 .pytest_cache/
 htmlcov/
+scratch/
