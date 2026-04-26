@@ -90,10 +90,13 @@ def groq_chat(query, docs, lang="English", pdf_content=None):
 
     # If PDF is present, we DISCARD web search results to prevent hallucinations/leaks
     if is_pdf_mode:
-        context = "HIDDEN (PDF Mode Active)"
+        context_to_use = "HIDDEN (PDF Mode Active)"
         system_msg = "You are IndiaSearch Precise PDF Analyst. You MUST answer EXCLUSIVELY from the provided CORE DOCUMENT. DO NOT use your internal knowledge. DO NOT use search results. If information is missing, say you cannot find it in the document."
     else:
-        system_msg = "You are IndiaSearch Precise Engine. You provide sharp, high-fidelity answers. For general overview questions, you give 4-5 lines of informative text. For specific entity requests, you give only the entity name."
+        context_to_use = context
+        system_msg = """You are IndiaSearch Precise Engine. You provide sharp, high-fidelity answers. 
+        For general overview questions, you give 4-5 lines of informative text. 
+        CRITICAL: Always add short citation markers like [1], [2] beside the claims based on the General Search Context. Do not invent source numbers."""
 
     # User's language and length instructions
     prompt = f"""
@@ -103,16 +106,12 @@ def groq_chat(query, docs, lang="English", pdf_content=None):
         {pdf_info}
         
         STRICT INSTRUCTIONS FOR AI:
-        1. IF 'CORE DOCUMENT CONTENT' IS PROVIDED ABOVE: You are in STRICT PDF MODE. You MUST answer the user's query EXCLUSIVELY using the information within the 'CORE DOCUMENT CONTENT'. 
-           - DO NOT use any external knowledge. 
-           - DO NOT use your own memory. 
-           - DO NOT use the search context below.
-           - If the answer is not in the document, say: "Is document mein aisi koi information nahi mili" (or {lang} equivalent).
-        2. IF NO CORE DOCUMENT IS PROVIDED: Use the General Search Context provided below to give the best possible answer.
-        3. START THE ANSWER NOW in {lang}.
+        1. IF 'CORE DOCUMENT CONTENT' IS PROVIDED ABOVE: You are in STRICT PDF MODE. Answer the user's query EXCLUSIVELY using the information within the 'CORE DOCUMENT CONTENT'. DO NOT use any external knowledge. If the answer is not in the document, say: "Is document mein aisi koi information nahi mili".
+        2. IF NO CORE DOCUMENT IS PROVIDED: Use the General Search Context provided below to give the best possible answer with citations [1], [2] from the sources.
+        3. NO META-TALK. START THE ANSWER NOW in {lang}.
         
         General Search Context (IGNORE COMPLETELY if Core Document is provided):
-        {context}
+        {context_to_use}
     """
 
     try:
