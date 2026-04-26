@@ -5,12 +5,12 @@ from urllib.parse import urljoin, urldefrag, urlparse
 import re
 
 try:
-    from app.services.index_service import index_document
+    from app.services.index_service import index_document_sync as index_document
 except ImportError:
     try:
-        from indexer import index_document
+        from indexer import index_document_sync as index_document
     except ImportError:
-        from Indiasearch.indexer import index_document
+        from Indiasearch.indexer import index_document_sync as index_document
 
 class Crawler:
     def __init__(self, max_pages=300, max_depth=2, max_concurrency=15, timeout=7):
@@ -125,28 +125,29 @@ class Crawler:
             for w in workers:
                 w.cancel()
 
+SEED_URLS = [
+    # Government & Official
+    "https://www.india.gov.in/",
+    "https://www.isro.gov.in/sitemap.xml",
+    "https://www.rbi.org.in/",
+    
+    # News & Information
+    "https://www.thehindu.com/sitemap/sitemap-today.xml",
+    "https://timesofindia.indiatimes.com/sitemap.cms",
+    "https://indianexpress.com/sitemap.xml",
+    
+    # Jobs & Education
+    "https://www.naukri.com/sitemap/sitemap.xml",
+    "https://internshala.com/sitemap.xml",
+    "https://www.sarkariresult.com/",
+    
+    # Technology & Startups
+    "https://www.tcs.com/sitemap.xml",
+    "https://www.infosys.com/sitemap.xml",
+    "https://www.zomato.com/sitemap.xml"
+]
+
 if __name__ == "__main__":
-    SEED_URLS = [
-        # Government & Official
-        "https://www.india.gov.in/",
-        "https://www.isro.gov.in/sitemap.xml",
-        "https://www.rbi.org.in/",
-        
-        # News & Information
-        "https://www.thehindu.com/sitemap/sitemap-today.xml",
-        "https://timesofindia.indiatimes.com/sitemap.cms",
-        "https://indianexpress.com/sitemap.xml",
-        
-        # Jobs & Education
-        "https://www.naukri.com/sitemap/sitemap.xml",
-        "https://internshala.com/sitemap.xml",
-        "https://www.sarkariresult.com/",
-        
-        # Technology & Startups
-        "https://www.tcs.com/sitemap.xml",
-        "https://www.infosys.com/sitemap.xml",
-        "https://www.zomato.com/sitemap.xml"
-    ]
     
     crawler = Crawler(max_pages=500, max_depth=3, max_concurrency=20)
     print(f"\n🚀 Starting Indiasearch Async Web Crawler (Max {crawler.max_pages} pages)...\n")
