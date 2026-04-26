@@ -15,6 +15,8 @@ import re
 from datetime import datetime
 
 from app.cache.cache_manager import CacheManager, SEARCH_TTL
+from app.cache.query_normalizer import normalize_query, get_dynamic_ttl
+from app.cache import hot_query_store
 from app.integrations import duckduckgo_client, yahoo_client, api_client, google_client, wiki_client
 from app.integrations.elastic_client import ElasticClient
 from app.services import (
@@ -173,12 +175,19 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
     
     logger.info(f"[Brain] Query: {query!r} | Intent: {intent} | Lang: {detected_lang}")
 
-    # ── Step 2: Cache Check ────────────────────────────────
-    cache_key = CacheManager.make_key("brain:search:v5", detected_lang, query, page, intent, filter)
+    # ── Step 2: Normalize query + Cache Check ──────────────
+    # Normalize: "Weather in Delhi" == "delhi weather" → same cache key
+    normalized = normalize_query(en_query)
+    cache_key = CacheManager.make_key("brain:search:v6", detected_lang, normalized, page, intent, filter)
+    
+    # Record this query for hot cache warming
+    hot_query_store.record_query(normalized)
+
     cached = CacheManager.get(cache_key)
     if cached:
         cached["from_cache"] = True
         cached["took_ms"] = round((time.time() - start_time) * 1000, 1)
+        logger.info(f"[Brain] ✅ Cache HIT: {normalized!r}")
         return cached
 
     results = []
@@ -268,10 +277,12 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
         src = r.get("source")
         if src and src not in sources_used: sources_used.append(src)
 
-    # ── Level 4: Paid Fallback Chain (Bing → Serper last resort) ──────
+    # ── Level 4: Paid Fallback Chain — Only if quality is insufficient ──
     quota = api_client.get_quota_status()
-    if len(filtered_results) < MIN_QUALITY_RESULTS and intent not in ["weather", "sports", "finance"] and not dedicated_api_filter:
-        logger.info(f"[Brain] Weak free results ({len(filtered_results)}). Triggering paid fallback chain.")
+    local_quality_ok = ranking_service.quality_check(filtered_results, min_results=MIN_QUALITY_RESULTS)
+    
+    if not local_quality_ok and intent not in ["weather", "sports", "finance"] and not dedicated_api_filter:
+        logger.info(f"[Brain] Local quality insufficient ({len(filtered_results)} results). Triggering paid API fallback.")
         api_res = await api_client.search(en_query, max_results=MAX_WEB_RESULTS)
         if api_res:
             sources_used.append("fallback_api")
@@ -282,7 +293,11 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
             filtered_results = merge_service.merge_and_deduplicate([filtered_results, api_res])
             quota = api_client.get_quota_status()
         else:
-            logger.warning("[Brain] Paid fallback returned no results or quota/key unavailable. Staying with free results.")
+            logger.warning("[Brain] Paid fallback returned no results. Staying with free results.")
+    else:
+        quota = api_client.get_quota_status()
+        if local_quality_ok:
+            logger.info(f"[Brain] ✅ Local results sufficient ({len(filtered_results)}). Skipping paid API.")
 
     # ── Level 5: Rank & Fresh Indexing ────────────────────
     final_ranked = ranking_service.rank(filtered_results, en_query)
@@ -332,7 +347,9 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
         "from_cache": False
     }
 
-    # ── Step 7: Cache final response ──────────────────────
-    CacheManager.set(cache_key, response, ttl=SEARCH_TTL)
+    # ── Step 7: Cache with dynamic TTL ────────────────────
+    dynamic_ttl = get_dynamic_ttl(intent, en_query)
+    CacheManager.set(cache_key, response, ttl=dynamic_ttl)
+    logger.info(f"[Brain] Cached response for {normalized!r} | TTL={dynamic_ttl}s")
     
     return response

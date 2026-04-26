@@ -32,6 +32,7 @@ from app.models import user as auth_store
 from app.services import ai_service as ai_summary
 from app.utils import translator
 from app.services.crawler_service import Crawler, SEED_URLS
+from app.cache import hot_query_store
 
 # --- Logging Setup ---
 logging.basicConfig(
@@ -56,18 +57,27 @@ async def daily_crawler_task():
     while True:
         try:
             logger.info("[Auto-Crawler] Starting daily background web crawl...")
-            # Using conservative limits to not overwhelm the deployment
             crawler = Crawler(max_pages=300, max_depth=2, max_concurrency=10)
             await crawler.run(SEED_URLS)
             logger.info("[Auto-Crawler] Daily crawl complete. Sleeping for 24 hours.")
         except Exception as e:
             logger.error(f"[Auto-Crawler] Error: {e}")
-        # Sleep for 24 hours (86400 seconds)
         await asyncio.sleep(86400)
+
+async def hot_cache_warmer_task():
+    """Warms cache for top queries every 30 minutes."""
+    await asyncio.sleep(300)  # Wait 5 min after startup for system to warm up
+    while True:
+        try:
+            await hot_query_store.warm_hot_cache(run_parallel_pipeline, top_n=20)
+        except Exception as e:
+            logger.error(f"[HotCache] Warming error: {e}")
+        await asyncio.sleep(1800)  # Re-warm every 30 minutes
 
 @app.on_event("startup")
 async def startup_event():
     asyncio.create_task(daily_crawler_task())
+    asyncio.create_task(hot_cache_warmer_task())
 # --- Mount Static Files ---
 FRONTEND_PATH = os.path.join(os.path.dirname(__file__), "..", "frontend")
 
