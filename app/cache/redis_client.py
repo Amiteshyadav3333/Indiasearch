@@ -32,13 +32,15 @@ class RedisClient:
                     url,
                     decode_responses=True,        # Return strings, not bytes
                     max_connections=20,           # Connection pool size
-                    socket_connect_timeout=5,     # Fail fast if Redis is down
-                    socket_timeout=5              # Operation timeout
+                    socket_connect_timeout=1,     # Fail fast if Redis is down
+                    socket_timeout=1              # Operation timeout
                 )
                 cls._client.ping()                # Early health check
                 logger.info(f"[Redis] Connected to: {url}")
             except Exception as e:
-                logger.error(f"[Redis] Connection to {url} failed: {e}")
+                # Suppress log spam if local redis is not running
+                if "localhost" not in url:
+                    logger.error(f"[Redis] Connection to {url} failed: {e}")
                 cls._client = None                # Ensure it remains None if connection fails
         return cls._client
 
