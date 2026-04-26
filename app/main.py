@@ -31,6 +31,7 @@ from app.integrations import api_client
 from app.models import user as auth_store
 from app.services import ai_service as ai_summary
 from app.utils import translator
+from app.services.crawler_service import Crawler, SEED_URLS
 
 # --- Logging Setup ---
 logging.basicConfig(
@@ -50,6 +51,23 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+async def daily_crawler_task():
+    while True:
+        try:
+            logger.info("[Auto-Crawler] Starting daily background web crawl...")
+            # Using conservative limits to not overwhelm the deployment
+            crawler = Crawler(max_pages=300, max_depth=2, max_concurrency=10)
+            await crawler.run(SEED_URLS)
+            logger.info("[Auto-Crawler] Daily crawl complete. Sleeping for 24 hours.")
+        except Exception as e:
+            logger.error(f"[Auto-Crawler] Error: {e}")
+        # Sleep for 24 hours (86400 seconds)
+        await asyncio.sleep(86400)
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(daily_crawler_task())
 # --- Mount Static Files ---
 FRONTEND_PATH = os.path.join(os.path.dirname(__file__), "..", "frontend")
 

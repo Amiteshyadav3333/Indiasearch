@@ -51,12 +51,13 @@ class Crawler:
         try:
             async with session.get(url, timeout=self.timeout) as response:
                 if response.status != 200:
-                    return None
-                if "text/html" not in response.headers.get("Content-Type", ""):
-                    return None
-                return await response.text()
+                    return None, None
+                ctype = response.headers.get("Content-Type", "").lower()
+                if "text/html" not in ctype and "xml" not in ctype:
+                    return None, None
+                return await response.text(), ctype
         except Exception:
-            return None
+            return None, None
 
     async def worker(self, session):
         while True:
@@ -69,10 +70,22 @@ class Crawler:
                 self.count += 1
                 print(f"[{self.count}] Depth={depth}  URL={url}")
 
-                html = await self.fetch_page(url, session)
-                if not html:
+                html, ctype = await self.fetch_page(url, session)
+                if not html or not ctype:
                     continue
 
+                # --- 1. Sitemap Parsing ---
+                if "xml" in ctype or url.endswith(".xml"):
+                    soup = BeautifulSoup(html, "xml")
+                    locs = soup.find_all("loc")
+                    for loc in locs:
+                        link = loc.text.strip()
+                        if self.valid_link(link) and link not in self.visited:
+                            await self.queue.put((link, depth + 1))
+                    print(f"[Sitemap] Extracted {len(locs)} links from {url}")
+                    continue
+
+                # --- 2. HTML Parsing ---
                 soup = BeautifulSoup(html, "html.parser")
                 title = soup.title.string.strip() if soup.title else "No Title"
                 content = self.clean_text(soup.get_text(" "))
@@ -116,29 +129,23 @@ if __name__ == "__main__":
     SEED_URLS = [
         # Government & Official
         "https://www.india.gov.in/",
-        "https://en.wikipedia.org/wiki/India",
-        "https://www.isro.gov.in/",
+        "https://www.isro.gov.in/sitemap.xml",
         "https://www.rbi.org.in/",
         
         # News & Information
-        "https://www.thehindu.com/",
-        "https://www.ndtv.com/",
-        "https://timesofindia.indiatimes.com/",
-        "https://indianexpress.com/",
-        "https://www.hindustantimes.com/",
+        "https://www.thehindu.com/sitemap/sitemap-today.xml",
+        "https://timesofindia.indiatimes.com/sitemap.cms",
+        "https://indianexpress.com/sitemap.xml",
         
         # Jobs & Education
-        "https://www.naukri.com/",
-        "https://internshala.com/",
+        "https://www.naukri.com/sitemap/sitemap.xml",
+        "https://internshala.com/sitemap.xml",
         "https://www.sarkariresult.com/",
-        "https://www.bhu.ac.in/",
-        "https://www.ignou.ac.in/",
         
         # Technology & Startups
-        "https://www.tcs.com/",
-        "https://www.infosys.com/",
-        "https://www.flipkart.com/",
-        "https://www.zomato.com/"
+        "https://www.tcs.com/sitemap.xml",
+        "https://www.infosys.com/sitemap.xml",
+        "https://www.zomato.com/sitemap.xml"
     ]
     
     crawler = Crawler(max_pages=500, max_depth=3, max_concurrency=20)
