@@ -626,7 +626,7 @@ if (pdfInput) {
     const formData = new FormData();
     formData.append("file", f);
     // Prefer sessionToken, fallback to persistent guestSession
-    const finalSess = authState.sessionToken || authState.guestSession;
+    const finalSess = authState.sessionToken || authState.guestId;
     formData.append("session_token", finalSess);
 
     try {
@@ -695,7 +695,7 @@ async function resetToHome() {
   closeAutocomplete();
   
   // Clear backend memory context for this session
-  const finalSess = authState.sessionToken || authState.guestSession;
+  const finalSess = authState.sessionToken || authState.guestId;
   try {
       await apiJsonRequest("/clear-context", { session_token: finalSess });
   } catch(e) { console.error("Failed to clear context"); }
@@ -812,7 +812,7 @@ async function search(pageNumber = 1, aiMode = false) {
   try {
     document.documentElement.setAttribute("data-ai-mode", aiMode ? "true" : "false");
     const params = new URLSearchParams({ q: query, page: String(pageNumber), filter: currentFilter, ai_mode: String(aiMode) });
-    const finalSess = authState.sessionToken || authState.guestSession;
+    const finalSess = authState.sessionToken || authState.guestId;
     params.set("session_token", finalSess);
 
     const res = await fetchWithApiFallback(`/search?${params}`);

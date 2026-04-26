@@ -156,6 +156,9 @@ async def search(q: str, page: int = 1, filter: str = "all", ai_mode: bool = Fal
         sess_key = session_token if session_token and session_token != "undefined" else "guest"
         pdf_content = PDF_STORE.get(sess_key)
         
+        if pdf_content:
+            logger.info(f"[Search] PDF Context ACTIVE for session {sess_key} (len: {len(pdf_content)})")
+
         # Execute the Intelligent Pipeline
         response = await run_parallel_pipeline(
             query=q, 
@@ -245,8 +248,10 @@ async def upload_pdf(file: UploadFile = File(...), session_token: str | None = F
         reader = PyPDF2.PdfReader(file.file)
         text = "".join([p.extract_text() for p in reader.pages])
         PDF_STORE[sess] = text[:50000]
-        return {"message": "PDF Processed"}
+        logger.info(f"[PDF] Uploaded for session {sess}. Extracted {len(text)} chars.")
+        return {"message": f"PDF Processed. {len(text)} characters extracted."}
     except Exception as e:
+        logger.error(f"[PDF] Error processing for {sess}: {e}")
         return JSONResponse({"error": str(e)}, 500)
 
 class ClearContextPayload(BaseModel):

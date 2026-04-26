@@ -85,7 +85,15 @@ def groq_chat(query, docs, lang="English", pdf_content=None):
             context += f"\nSOURCE [{idx}]\nTITLE: {d.get('title')}\nURL: {d.get('url')}\nTEXT: {d.get('content') or d.get('snippet')}\n"
 
     # PDF Context (Absolute Priority)
-    pdf_info = f"\n--- CORE DOCUMENT CONTENT (SOURCE OF TRUTH) ---\n{pdf_content}\n" if pdf_content else ""
+    is_pdf_mode = bool(pdf_content)
+    pdf_info = f"\n--- CORE DOCUMENT CONTENT (SOURCE OF TRUTH) ---\n{pdf_content}\n" if is_pdf_mode else ""
+
+    # If PDF is present, we DISCARD web search results to prevent hallucinations/leaks
+    if is_pdf_mode:
+        context = "HIDDEN (PDF Mode Active)"
+        system_msg = "You are IndiaSearch Precise PDF Analyst. You MUST answer EXCLUSIVELY from the provided CORE DOCUMENT. DO NOT use your internal knowledge. DO NOT use search results. If information is missing, say you cannot find it in the document."
+    else:
+        system_msg = "You are IndiaSearch Precise Engine. You provide sharp, high-fidelity answers. For general overview questions, you give 4-5 lines of informative text. For specific entity requests, you give only the entity name."
 
     # User's language and length instructions
     prompt = f"""
@@ -95,14 +103,15 @@ def groq_chat(query, docs, lang="English", pdf_content=None):
         {pdf_info}
         
         STRICT INSTRUCTIONS FOR AI:
-        1. IF 'CORE DOCUMENT CONTENT' IS PROVIDED ABOVE: You MUST answer the user's query EXCLUSIVELY using the information within the 'CORE DOCUMENT CONTENT'. DO NOT use any external knowledge. If the answer is not found in the document, reply strictly with: "Is document mein aisi koi information nahi mili" or the equivalent in {lang}. Explain from the document smoothly.
-        2. IF NO CORE DOCUMENT IS PROVIDED: Use the General Search Context provided below or your internal knowledge to give the best possible answer.
-        3. DO NOT ASK THE USER TO UPLOAD A FILE. NEVER SAY 'Please upload a PDF'. 
-        4. IF ANSWERING GENERALLY, PROVIDE A ROBUST 5-LINE ANSWER.
-        5. When using General Search Context, add short citation markers like [1], [2] beside the claims where useful. Do not invent source numbers.
-        6. NO META-TALK. DON'T SAY 'Understood' OR 'Processing'. START THE ANSWER NOW in {lang}.
+        1. IF 'CORE DOCUMENT CONTENT' IS PROVIDED ABOVE: You are in STRICT PDF MODE. You MUST answer the user's query EXCLUSIVELY using the information within the 'CORE DOCUMENT CONTENT'. 
+           - DO NOT use any external knowledge. 
+           - DO NOT use your own memory. 
+           - DO NOT use the search context below.
+           - If the answer is not in the document, say: "Is document mein aisi koi information nahi mili" (or {lang} equivalent).
+        2. IF NO CORE DOCUMENT IS PROVIDED: Use the General Search Context provided below to give the best possible answer.
+        3. START THE ANSWER NOW in {lang}.
         
-        General Search Context (ignore if Core Document is provided):
+        General Search Context (IGNORE COMPLETELY if Core Document is provided):
         {context}
     """
 
@@ -111,7 +120,7 @@ def groq_chat(query, docs, lang="English", pdf_content=None):
             messages=[
                 {
                     "role": "system",
-                    "content": "You are IndiaSearch Precise Engine. You provide sharp, high-fidelity answers. For general overview questions, you give 4-5 lines of informative text. For specific entity requests, you give only the entity name."
+                    "content": system_msg
                 },
                 {
                     "role": "user",
