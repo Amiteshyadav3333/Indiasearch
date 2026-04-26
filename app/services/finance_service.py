@@ -14,20 +14,35 @@ async def fetch_stock(query: str) -> dict:
         return None
         
     symbol_map = {
-        "nifty": "NSE:NIFTY50",
-        "sensex": "BSE:SENSEX",
         "reliance": "RELIANCE.BSE",
         "tcs": "TCS.BSE",
+        "infosys": "INFY.BSE",
+        "infy": "INFY.BSE",
         "hdfc": "HDFCBANK.BSE",
-        "sbi": "SBIN.BSE"
+        "hdfc bank": "HDFCBANK.BSE",
+        "sbi": "SBIN.BSE",
+        "icici": "ICICIBANK.BSE",
+        "axis": "AXISBANK.BSE",
+        "itc": "ITC.BSE",
+        "wipro": "WIPRO.BSE",
+        "apple": "AAPL",
+        "tesla": "TSLA",
+        "microsoft": "MSFT",
+        "google": "GOOGL",
+        "amazon": "AMZN"
     }
     
-    symbol = "NSE:NIFTY50" # Default for generic "Stock data" query
+    symbol = "RELIANCE.BSE" # Reliable default for generic "Stock data" query
     q_low = query.lower()
-    for k, v in symbol_map.items():
+    for k, v in sorted(symbol_map.items(), key=lambda item: len(item[0]), reverse=True):
         if k in q_low:
             symbol = v
             break
+    else:
+        words = [w.strip(" ,.-").upper() for w in query.split()]
+        ticker = next((w for w in words if 1 <= len(w) <= 8 and w.isalpha() and w.lower() not in {"stock", "price", "share"}), "")
+        if ticker:
+            symbol = ticker
             
     url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey={api_key}"
     try:

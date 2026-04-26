@@ -10,7 +10,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=smart-filters-3">
 
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -165,14 +165,14 @@
 
     <!-- ═══ SEARCH FILTERS ═══ -->
     <div id="searchFilters" class="filter-bar" style="display:none;">
-      <button class="filter-pill active" onclick="setFilter('all')">
+      <button class="filter-pill active" data-filter="all" onclick="setFilter('all')">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <circle cx="11" cy="11" r="8" />
           <line x1="21" y1="21" x2="16.65" y2="16.65" />
         </svg>
         All
       </button>
-      <button class="filter-pill" onclick="setFilter('news')">
+      <button class="filter-pill" data-filter="news" onclick="setFilter('news')">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a4 4 0 0 1-4-4V6" />
           <path d="M18 14H10" />
@@ -181,7 +181,7 @@
         </svg>
         News
       </button>
-      <button class="filter-pill" onclick="setFilter('images')">
+      <button class="filter-pill" data-filter="images" onclick="setFilter('images')">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <rect x="3" y="3" width="18" height="18" rx="2" />
           <circle cx="8.5" cy="8.5" r="1.5" />
@@ -189,14 +189,14 @@
         </svg>
         Images
       </button>
-      <button class="filter-pill" onclick="setFilter('videos')">
+      <button class="filter-pill" data-filter="videos" onclick="setFilter('videos')">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <polygon points="23 7 16 12 23 17 23 7" />
           <rect x="1" y="5" width="15" height="14" rx="2" />
         </svg>
         Videos
       </button>
-      <button class="filter-pill" onclick="setFilter('weather')">
+      <button class="filter-pill" data-filter="weather" onclick="setFilter('weather')">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <path d="M17.5 19a3.5 3.5 0 1 1 0-7c.1 0 .2 0 .3 0a5 5 0 1 1 9.2 2" />
           <path d="M12 18V22" />
@@ -204,12 +204,19 @@
         </svg>
         Weather
       </button>
-      <button class="filter-pill" onclick="setFilter('score')">
+      <button class="filter-pill" data-filter="score" onclick="setFilter('score')">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <circle cx="12" cy="12" r="10" />
           <path d="M12 8v8M8 12h8" />
         </svg>
         Live Score
+      </button>
+      <button class="filter-pill" data-filter="stock" onclick="setFilter('stock')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="3 17 9 11 13 15 21 7" />
+          <polyline points="15 7 21 7 21 13" />
+        </svg>
+        Stock
       </button>
       <button class="filter-pill ai-tab" onclick="enterAiMode()">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -360,7 +367,7 @@
     </div>
   </div>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=smart-filters-3"></script>
 </body>
 
 </html>

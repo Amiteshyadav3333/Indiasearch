@@ -5,7 +5,7 @@
 # 2. Level 0: Redis Cache Hit
 # 3. Level 1: Parallel (Local Index + DDG + Yahoo)
 # 4. Level 2: Deduplication & Fresh Indexing
-# 5. Level 3: Fallback (Bing API - 100/day hard limit)
+# 5. Level 3: Paid fallback chain (Bing first, Serper last-resort with 80/day cap)
 # ──────────────────────────────────────────────────────────────
 
 import asyncio
@@ -28,7 +28,6 @@ from app.services import (
     news_service,
     wiki_service
 )
-from app.services.api_quota_manager import APIQuotaManager
 from app.utils import translator
 
 logger = logging.getLogger(__name__)
@@ -38,6 +37,38 @@ PARALLEL_TIMEOUT    = 3.0    # total timeout for free sources
 MIN_QUALITY_RESULTS = 5      # fallback to Bing if below this
 MAX_WEB_RESULTS     = 10
 # ──────────────────────────────────────────────────────────
+
+def build_ai_sources(results: list, limit: int = 8) -> list:
+    """
+    Create compact, clickable source metadata for the AI answer card.
+    Keeps AI mode useful without changing the normal search result flow.
+    """
+    sources = []
+    seen_urls = set()
+
+    for item in results:
+        url = (item.get("url") or "").strip()
+        title = (item.get("title") or "").strip()
+
+        if not url.startswith(("http://", "https://")) or not title:
+            continue
+        if url in seen_urls:
+            continue
+
+        seen_urls.add(url)
+        host = re.sub(r"^www\.", "", re.sub(r"^https?://", "", url).split("/")[0])
+        sources.append({
+            "title": title,
+            "url": url,
+            "host": host,
+            "snippet": (item.get("snippet") or item.get("content") or "")[:220],
+            "source": item.get("source") or host,
+        })
+
+        if len(sources) >= limit:
+            break
+
+    return sources
 
 async def identify_intent(query: str) -> str:
     """
@@ -121,12 +152,20 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
     
     # ── Step 1: Identify Intent ────────────────────────────
     intent = await identify_intent(en_query)
+    if filter == "news":
+        intent = "news"
+    elif filter == "weather":
+        intent = "weather"
+    elif filter == "score":
+        intent = "sports"
+    elif filter in ["stock", "finance"]:
+        intent = "finance"
     if force_ai: intent = "ai"
     
     logger.info(f"[Brain] Query: {query!r} | Intent: {intent} | Lang: {detected_lang}")
 
     # ── Step 2: Cache Check ────────────────────────────────
-    cache_key = CacheManager.make_key("brain:search", detected_lang, query, page, intent)
+    cache_key = CacheManager.make_key("brain:search:v5", detected_lang, query, page, intent, filter)
     cached = CacheManager.get(cache_key)
     if cached:
         cached["from_cache"] = True
@@ -151,11 +190,21 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
     # ── Level 2: Parallel Search (Local + Web) ────────────
     tasks = []
     
-    if filter == "images":
-        # EXCLUSIVE IMAGE SEARCH: DuckDuckGo + Yahoo
-        tasks.append(asyncio.create_task(duckduckgo_client.search_images(en_query, max_results=MAX_WEB_RESULTS)))
-        tasks.append(asyncio.create_task(yahoo_client.search_images(en_query, max_results=MAX_WEB_RESULTS)))
+    dedicated_api_filter = filter in ["news", "weather", "score", "stock", "finance"]
+
+    if filter == "news":
+        logger.info("[Brain] Dedicated News filter active. Using news API only.")
+        tasks.append(asyncio.create_task(news_service.fetch_news(en_query)))
+    elif dedicated_api_filter:
+        logger.info(f"[Brain] Dedicated API filter active: {filter}. Skipping generic web search.")
+    elif filter == "images":
+        # EXCLUSIVE IMAGE SEARCH: Serper API
+        tasks.append(asyncio.create_task(api_client.search_images(en_query, max_results=MAX_WEB_RESULTS)))
         # Do not run AI summary or Text indexing for Images
+    elif filter == "videos":
+        # EXCLUSIVE VIDEO SEARCH: Serper API
+        tasks.append(asyncio.create_task(api_client.search_videos(en_query, max_results=MAX_WEB_RESULTS)))
+        # Do not run AI summary or Text indexing for Videos
     else:
         # 1. Local Elasticsearch
         tasks.append(asyncio.create_task(ElasticClient.search_async(en_query, max_results=MAX_WEB_RESULTS)))
@@ -181,7 +230,7 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
     if filter == "all" and page == 1:
         kp_task = asyncio.create_task(wiki_service.fetch_knowledge_panel(en_query))
 
-    done, pending = await asyncio.wait(tasks, timeout=PARALLEL_TIMEOUT)
+    done, pending = await asyncio.wait(tasks, timeout=PARALLEL_TIMEOUT) if tasks else (set(), set())
     
     search_collections = []
     
@@ -210,18 +259,21 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
         src = r.get("source")
         if src and src not in sources_used: sources_used.append(src)
 
-    # ── Level 4: Fallback to Paid API (Bing/SerpAPI) ──────
-    quota = APIQuotaManager.status()
-    if len(filtered_results) < MIN_QUALITY_RESULTS and intent not in ["weather", "sports", "finance"]:
-        if APIQuotaManager.can_call():
-            logger.info(f"[Brain] Weak results ({len(filtered_results)}). Triggering fallback API.")
-            api_res = await api_client.search(en_query, max_results=MAX_WEB_RESULTS)
-            if api_res:
-                sources_used.append("fallback_api")
-                filtered_results = merge_service.merge_and_deduplicate([filtered_results, api_res])
-                quota = APIQuotaManager.status() # Update status
+    # ── Level 4: Paid Fallback Chain (Bing → Serper last resort) ──────
+    quota = api_client.get_quota_status()
+    if len(filtered_results) < MIN_QUALITY_RESULTS and intent not in ["weather", "sports", "finance"] and not dedicated_api_filter:
+        logger.info(f"[Brain] Weak free results ({len(filtered_results)}). Triggering paid fallback chain.")
+        api_res = await api_client.search(en_query, max_results=MAX_WEB_RESULTS)
+        if api_res:
+            sources_used.append("fallback_api")
+            for r in api_res:
+                src = r.get("source")
+                if src and src not in sources_used:
+                    sources_used.append(src)
+            filtered_results = merge_service.merge_and_deduplicate([filtered_results, api_res])
+            quota = api_client.get_quota_status()
         else:
-            logger.warning("[Brain] API Quota exhausted. Staying with free results.")
+            logger.warning("[Brain] Paid fallback returned no results or quota/key unavailable. Staying with free results.")
 
     # ── Level 5: Rank & Fresh Indexing ────────────────────
     final_ranked = ranking_service.rank(filtered_results, en_query)
@@ -233,7 +285,7 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
 
     # ── Level 6: AI Summary (Google-like AI Overview) ─────
     ai_summary = None
-    if page == 1 or force_ai or intent == "ai":
+    if force_ai or intent == "ai" or (page == 1 and not dedicated_api_filter):
         ai_summary = await asyncio.to_thread(
             ai_service.generate_ai_summary, 
             query=query, 
@@ -262,7 +314,8 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
         "intent": intent,
         "special_data": special_data,
         "knowledge_panel": knowledge_panel,
-        "ai_summary": ai_summary if filter != "images" else None,
+        "ai_summary": ai_summary if filter not in ["images", "videos"] else None,
+        "ai_sources": build_ai_sources(final_ranked) if filter not in ["images", "videos"] and page == 1 else [],
         "total": len(final_ranked),
         "sources_used": sources_used,
         "quota_status": quota,
@@ -274,4 +327,3 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
     CacheManager.set(cache_key, response, ttl=SEARCH_TTL)
     
     return response
-

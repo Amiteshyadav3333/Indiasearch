@@ -2,6 +2,7 @@
 import os
 import aiohttp
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +15,8 @@ async def fetch_weather(query: str) -> dict:
         return None
         
     # Extract city name from query (e.g., "weather in Delhi" -> "Delhi")
-    city = query.replace("weather", "").replace("in", "").strip()
+    city = re.sub(r"\b(weather|mausam|forecast|temperature|temp)\b", "", query, flags=re.I)
+    city = re.sub(r"^\s*(in|for|at)\s+", "", city.strip(), flags=re.I)
     if not city:
         city = "Delhi" # default
 

@@ -27,7 +27,7 @@ load_dotenv(DOTENV_PATH, override=True)
 
 # --- Service & Utility Imports ---
 from app.services.search_manager import run_parallel_pipeline
-from app.services.api_quota_manager import APIQuotaManager
+from app.integrations import api_client
 from app.models import user as auth_store
 from app.services import ai_service as ai_summary
 from app.utils import translator
@@ -98,6 +98,14 @@ class LogoutPayload(BaseModel):
     session_token: str
 
 # --- Helper Functions ---
+def normalize_session_token(token: str | None) -> str | None:
+    if not token:
+        return None
+    token = token.strip()
+    if token.lower() in {"undefined", "null", "none", ""} or token.startswith("guest_"):
+        return None
+    return token
+
 def public_user(user: dict):
     return {
         "id": user.get("id"),
@@ -116,7 +124,8 @@ async def search(q: str, page: int = 1, filter: str = "all", ai_mode: bool = Fal
         force_ai = (filter == "askAI" or ai_mode)
         
         # Get PDF context if any exists for this session
-        sess_key = session_token if session_token else "guest"
+        valid_session_token = normalize_session_token(session_token)
+        sess_key = session_token if session_token and session_token != "undefined" else "guest"
         pdf_content = PDF_STORE.get(sess_key)
         
         # Execute the Intelligent Pipeline
@@ -130,8 +139,8 @@ async def search(q: str, page: int = 1, filter: str = "all", ai_mode: bool = Fal
         )
         
         # Save history if logged in
-        if session_token:
-            user = auth_store.get_user_by_session(session_token)
+        if valid_session_token:
+            user = auth_store.get_user_by_session(valid_session_token)
             if user:
                 auth_store.save_search_query(user["id"], q)
 
@@ -188,7 +197,7 @@ async def health():
 
 @app.get("/api/quota")
 async def get_quota():
-    return APIQuotaManager.status()
+    return api_client.get_quota_status()
 
 @app.post("/visual-search")
 async def visual_search(file: UploadFile = File(...)):

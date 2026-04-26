@@ -1,7 +1,7 @@
 # app/services/api_quota_manager.py
 # 💰 API Quota Manager — Daily Rate Limiter
 # ─────────────────────────────────────────
-# Enforces a hard daily limit of 100 API calls.
+# Enforces hard daily limits for paid fallback API calls.
 # Uses Redis if available, falls back to in-memory counter.
 # Resets automatically at midnight (IST / UTC+5:30).
 #
@@ -23,10 +23,15 @@ logger = logging.getLogger(__name__)
 
 # ── Config ────────────────────────────────────────────────
 DAILY_API_LIMIT = int(os.getenv("API_DAILY_LIMIT", "100"))
+PROVIDER_LIMITS = {
+    "default": DAILY_API_LIMIT,
+    "bing": int(os.getenv("BING_DAILY_LIMIT", str(DAILY_API_LIMIT))),
+    "serper": int(os.getenv("SERPER_DAILY_LIMIT", "80")),
+}
 IST = timezone(timedelta(hours=5, minutes=30))
 
 # ── In-memory fallback ────────────────────────────────────
-_mem_count: int = 0
+_mem_counts: dict[str, int] = {}
 _mem_date: str = ""          # "YYYY-MM-DD" in IST
 
 
@@ -51,29 +56,40 @@ class APIQuotaManager:
     """
 
     @staticmethod
-    def _redis_key() -> str:
-        return f"api_quota:{_today_ist()}"
+    def _normalize_provider(provider: str = "default") -> str:
+        return (provider or "default").strip().lower()
 
     @staticmethod
-    def can_call() -> bool:
+    def _limit(provider: str = "default") -> int:
+        return PROVIDER_LIMITS.get(APIQuotaManager._normalize_provider(provider), DAILY_API_LIMIT)
+
+    @staticmethod
+    def _redis_key(provider: str = "default") -> str:
+        provider = APIQuotaManager._normalize_provider(provider)
+        return f"api_quota:{provider}:{_today_ist()}"
+
+    @staticmethod
+    def can_call(provider: str = "default") -> bool:
         """Return True if we still have quota remaining today."""
-        return APIQuotaManager.remaining() > 0
+        return APIQuotaManager.remaining(provider) > 0
 
     @staticmethod
-    def remaining() -> int:
+    def remaining(provider: str = "default") -> int:
         """Return number of API calls still allowed today."""
-        used = APIQuotaManager._get_count()
-        return max(0, DAILY_API_LIMIT - used)
+        used = APIQuotaManager._get_count(provider)
+        return max(0, APIQuotaManager._limit(provider) - used)
 
     @staticmethod
-    def increment() -> int:
+    def increment(provider: str = "default") -> int:
         """Increment today's counter. Returns new count."""
-        global _mem_count, _mem_date
+        global _mem_counts, _mem_date
+
+        provider = APIQuotaManager._normalize_provider(provider)
 
         r = _get_redis()
         if r:
             try:
-                key = APIQuotaManager._redis_key()
+                key = APIQuotaManager._redis_key(provider)
                 count = r.incr(key)
                 # Set TTL = seconds until midnight IST
                 now_ist = datetime.now(IST)
@@ -82,7 +98,7 @@ class APIQuotaManager:
                 )
                 ttl = int((midnight - now_ist).total_seconds())
                 r.expire(key, ttl)
-                logger.info(f"[Quota] API call #{count}/{DAILY_API_LIMIT} today.")
+                logger.info(f"[Quota:{provider}] API call #{count}/{APIQuotaManager._limit(provider)} today.")
                 return int(count)
             except Exception as e:
                 logger.warning(f"[Quota] Redis increment failed: {e}")
@@ -90,41 +106,54 @@ class APIQuotaManager:
         # In-memory fallback
         today = _today_ist()
         if _mem_date != today:
-            _mem_count = 0
+            _mem_counts = {}
             _mem_date = today
-        _mem_count += 1
-        logger.info(f"[Quota] API call #{_mem_count}/{DAILY_API_LIMIT} today (memory).")
-        return _mem_count
+        _mem_counts[provider] = _mem_counts.get(provider, 0) + 1
+        logger.info(f"[Quota:{provider}] API call #{_mem_counts[provider]}/{APIQuotaManager._limit(provider)} today (memory).")
+        return _mem_counts[provider]
 
     @staticmethod
-    def _get_count() -> int:
+    def _get_count(provider: str = "default") -> int:
         """Get current count for today."""
-        global _mem_count, _mem_date
+        global _mem_counts, _mem_date
+
+        provider = APIQuotaManager._normalize_provider(provider)
 
         r = _get_redis()
         if r:
             try:
-                val = r.get(APIQuotaManager._redis_key())
+                val = r.get(APIQuotaManager._redis_key(provider))
                 return int(val) if val else 0
             except Exception:
                 pass
 
         today = _today_ist()
         if _mem_date != today:
-            _mem_count = 0
+            _mem_counts = {}
             _mem_date = today
-        return _mem_count
+        return _mem_counts.get(provider, 0)
 
     @staticmethod
-    def status() -> dict:
+    def status(provider: str = "default") -> dict:
         """Return full quota status as a dict."""
-        used = APIQuotaManager._get_count()
-        remaining = max(0, DAILY_API_LIMIT - used)
+        provider = APIQuotaManager._normalize_provider(provider)
+        limit = APIQuotaManager._limit(provider)
+        used = APIQuotaManager._get_count(provider)
+        remaining = max(0, limit - used)
         return {
+            "provider":      provider,
             "date_ist":      _today_ist(),
-            "limit":         DAILY_API_LIMIT,
+            "limit":         limit,
             "used":          used,
             "remaining":     remaining,
             "exhausted":     remaining == 0,
             "backend":       "redis" if _get_redis() else "memory",
+        }
+
+    @staticmethod
+    def status_all() -> dict:
+        """Return quota status for all paid fallback providers."""
+        return {
+            "bing": APIQuotaManager.status("bing"),
+            "serper": APIQuotaManager.status("serper"),
         }

@@ -81,8 +81,8 @@ def groq_chat(query, docs, lang="English", pdf_content=None):
     # Combine context
     context = ""
     if docs:
-        for d in docs[:8]:
-            context += f"\nTITLE: {d.get('title')}\nURL: {d.get('url')}\nTEXT: {d.get('content') or d.get('snippet')}\n"
+        for idx, d in enumerate(docs[:8], start=1):
+            context += f"\nSOURCE [{idx}]\nTITLE: {d.get('title')}\nURL: {d.get('url')}\nTEXT: {d.get('content') or d.get('snippet')}\n"
 
     # PDF Context (Absolute Priority)
     pdf_info = f"\n--- CORE DOCUMENT CONTENT (SOURCE OF TRUTH) ---\n{pdf_content}\n" if pdf_content else ""
@@ -99,7 +99,8 @@ def groq_chat(query, docs, lang="English", pdf_content=None):
         2. IF NO CORE DOCUMENT IS PROVIDED: Use the General Search Context provided below or your internal knowledge to give the best possible answer.
         3. DO NOT ASK THE USER TO UPLOAD A FILE. NEVER SAY 'Please upload a PDF'. 
         4. IF ANSWERING GENERALLY, PROVIDE A ROBUST 5-LINE ANSWER.
-        5. NO META-TALK. DON'T SAY 'Understood' OR 'Processing'. START THE ANSWER NOW in {lang}.
+        5. When using General Search Context, add short citation markers like [1], [2] beside the claims where useful. Do not invent source numbers.
+        6. NO META-TALK. DON'T SAY 'Understood' OR 'Processing'. START THE ANSWER NOW in {lang}.
         
         General Search Context (ignore if Core Document is provided):
         {context}

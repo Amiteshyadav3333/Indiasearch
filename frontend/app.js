@@ -396,9 +396,19 @@ let currentFilter = "all";
 function setFilter(type) {
   currentFilter = type;
   document.querySelectorAll(".filter-pill").forEach(b => b.classList.remove("active"));
-  const labels = { all: "All", news: "News", images: "Images", videos: "Videos" };
-  const btn = Array.from(document.querySelectorAll(".filter-pill")).find(b => b.textContent.trim().includes(labels[type]));
+  const btn = document.querySelector(`.filter-pill[data-filter="${type}"]`);
   if (btn) btn.classList.add("active");
+
+  const defaultQueries = {
+    news: "latest india news",
+    weather: "weather in Delhi",
+    score: "live cricket score",
+    stock: "reliance stock price"
+  };
+  if (searchInput && !searchInput.value.trim() && defaultQueries[type]) {
+    searchInput.value = defaultQueries[type];
+  }
+
   search(1, false);
 }
 
@@ -709,6 +719,55 @@ function getSourceBadge(url, fallback = "Source") {
   } catch { return fallback; }
 }
 
+function escapeHtml(value = "") {
+  return String(value).replace(/[&<>"']/g, ch => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  }[ch]));
+}
+
+function getReadableHost(url, fallback = "Source") {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return fallback;
+  }
+}
+
+function renderAiSources(sources = []) {
+  return "";
+}
+
+function renderMarkdownWithCitations(markdown = "", sources = []) {
+  const linkedText = String(markdown).replace(/\[(\d+)\]/g, (match, number) => {
+    const src = sources[Number(number) - 1];
+    if (!src || !src.url) {
+      return `<span class="ai-citation ai-citation-missing" title="Source ${number} is not available in this response">[${number}]</span>`;
+    }
+
+    const url = escapeHtml(src.url);
+    const title = escapeHtml(src.title || "Open source");
+    return `<a class="ai-citation" href="${url}" target="_blank" rel="noopener noreferrer" title="${title}" data-source-url="${url}">[${number}]</a>`;
+  });
+
+  return marked.parse(linkedText);
+}
+
+document.addEventListener("click", (event) => {
+  const link = event.target.closest(".ai-citation[data-source-url], .ai-source-card[data-source-url]");
+  if (!link) return;
+
+  const url = link.getAttribute("data-source-url") || link.getAttribute("href");
+  if (!url) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+  window.open(url, "_blank", "noopener,noreferrer");
+});
+
 // ═══════════════════════════════════════════
 // MAIN SEARCH
 // ═══════════════════════════════════════════
@@ -785,6 +844,8 @@ async function search(pageNumber = 1, aiMode = false) {
     let summaryHtml = "";
     let shouldAnimate = false;
     let rawText = "";
+    const aiSources = data.ai_sources || [];
+    const aiSourcesHtml = renderAiSources(aiSources);
 
     if (data.ai_summary && pageNumber === 1) {
       rawText = typeof data.ai_summary === 'string' ? data.ai_summary : (data.ai_summary.answer || String(data.ai_summary));
@@ -797,12 +858,14 @@ async function search(pageNumber = 1, aiMode = false) {
               <span style="background: linear-gradient(90deg, #3b82f6, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">IndiaSearch AI</span>
             </div>
             <div class="ai-overview-text" id="streamingAI"></div>
+            ${aiSourcesHtml}
           </div>`;
       } else {
         summaryHtml = `
           <div class="summary-card">
             <div class="summary-label">✨ Instant AI Answer</div>
-            <div class="summary-text">${marked.parse(rawText)}</div>
+            <div class="summary-text">${renderMarkdownWithCitations(rawText, aiSources)}</div>
+            ${aiSourcesHtml}
           </div>`;
       }
     }
@@ -850,7 +913,7 @@ async function search(pageNumber = 1, aiMode = false) {
               setTimeout(typeWriter, speed);
               if (mainWrap) mainWrap.scrollTop = mainWrap.scrollHeight;
            } else {
-              target.innerHTML = marked.parse(rawText); // Run through markdown parser once done
+              target.innerHTML = renderMarkdownWithCitations(rawText, aiSources); // Run through markdown parser once done
            }
         }
         typeWriter();
@@ -881,7 +944,7 @@ async function search(pageNumber = 1, aiMode = false) {
 
     // If NO results at all (no web results AND no weather/summary/sports/stocks)
     const hasResults = (data.results && data.results.length > 0);
-    const hasSmartAnswer = (data.weather || data.summary || data.knowledge_panel || data.sports || data.stocks);
+    const hasSmartAnswer = Boolean(data.special_data || data.weather || data.summary || data.knowledge_panel || data.sports || data.stocks);
 
     if (!hasResults && !hasSmartAnswer) {
       const noRes = await translateText("No results found", targetLang);
@@ -926,12 +989,53 @@ async function search(pageNumber = 1, aiMode = false) {
       // News detection: either filter is news OR item has is_news flag
       const isNews = (currentFilter === "news") || item.is_news === true;
       const isImages = currentFilter === "images";
+      const isVideos = currentFilter === "videos";
       let host = item.url;
       try { host = new URL(item.url).hostname.replace(/^www\./, ""); } catch { }
       const sourceName = getSourceBadge(item.url, host);
 
       if (aiMode) {
         return ""; // In true AI Mode, don't show normal results
+      }
+
+      if (isVideos) {
+        let videoId = "";
+        if (item.url.includes("youtube.com/watch?v=")) {
+          videoId = item.url.split("v=")[1].split("&")[0];
+        } else if (item.url.includes("youtu.be/")) {
+          videoId = item.url.split("youtu.be/")[1].split("?")[0];
+        }
+
+        if (videoId) {
+          return `
+            <div class="video-card">
+              <div class="video-frame-container" style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 12px; background: #000; margin-bottom: 10px;">
+                <iframe src="https://www.youtube.com/embed/${videoId}" 
+                        style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0;" 
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                        allowfullscreen>
+                </iframe>
+              </div>
+              <div class="video-meta">
+                <a href="${item.url}" target="_blank" class="video-title" style="font-weight: 600; font-size: 16px; color: var(--text-primary); text-decoration: none; display: block; margin-bottom: 4px; line-height: 1.4;">${tt}</a>
+                <div class="video-source" style="font-size: 13px; color: var(--text-secondary);">${ts}</div>
+              </div>
+            </div>`;
+        } else {
+          return `
+            <div class="video-card" onclick="window.open('${item.url}', '_blank')" style="cursor: pointer;">
+              <div class="video-thumbnail" style="position: relative; border-radius: 12px; overflow: hidden; margin-bottom: 10px;">
+                <img src="${item.image || ''}" alt="${tt}" style="width: 100%; height: 200px; object-fit: cover; background: #1a1a1a;" loading="lazy">
+                <div class="play-icon" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.6); border-radius: 50%; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center;">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>
+                </div>
+              </div>
+              <div class="video-meta">
+                <div class="video-title" style="font-weight: 600; font-size: 16px; color: var(--text-primary); display: block; margin-bottom: 4px; line-height: 1.4;">${tt}</div>
+                <div class="video-source" style="font-size: 13px; color: var(--text-secondary);">${ts}</div>
+              </div>
+            </div>`;
+        }
       }
 
       if (isImages) {
@@ -1004,6 +1108,9 @@ async function search(pageNumber = 1, aiMode = false) {
     } else if (currentFilter === "images") {
       resultsBox.innerHTML = `<div class="image-grid">${htmlItems.join("")}</div>`;
       renderPagination(data.total_hits || 0, pageNumber);
+    } else if (currentFilter === "videos") {
+      resultsBox.innerHTML = `<div class="video-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px;">${htmlItems.join("")}</div>`;
+      renderPagination(data.total || 0, pageNumber);
     } else if (currentFilter === "news") {
       resultsBox.innerHTML = `<div class="news-grid-premium">${htmlItems.join("")}</div>`;
       renderPagination(data.total || 0, pageNumber);
@@ -1559,4 +1666,3 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 // Final Initialization
 updateUserUI();
-
