@@ -270,5 +270,40 @@ async def read_article(url: str):
     except:
         return {"error": "Blocked"}
 
+# Explicit routes for favicon and SEO files (must be BEFORE StaticFiles mount)
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return FileResponse(os.path.join(FRONTEND_PATH, "favicon.ico"), media_type="image/x-icon")
+
+@app.get("/favicon-512.png", include_in_schema=False)
+async def favicon_512():
+    return FileResponse(os.path.join(FRONTEND_PATH, "favicon-512.png"), media_type="image/png")
+
+@app.get("/favicon-32x32.png", include_in_schema=False)
+async def favicon_32():
+    return FileResponse(os.path.join(FRONTEND_PATH, "favicon-32x32.png"), media_type="image/png")
+
+@app.get("/favicon-16x16.png", include_in_schema=False)
+async def favicon_16():
+    return FileResponse(os.path.join(FRONTEND_PATH, "favicon-16x16.png"), media_type="image/png")
+
+@app.get("/apple-touch-icon.png", include_in_schema=False)
+async def apple_touch_icon():
+    return FileResponse(os.path.join(FRONTEND_PATH, "apple-touch-icon.png"), media_type="image/png")
+
+@app.get("/manifest.json", include_in_schema=False)
+async def manifest():
+    return FileResponse(os.path.join(FRONTEND_PATH, "manifest.json"), media_type="application/manifest+json")
+
+@app.get("/sitemap.xml", include_in_schema=False)
+async def sitemap():
+    return FileResponse(os.path.join(FRONTEND_PATH, "sitemap.xml"), media_type="application/xml")
+
+@app.get("/robots.txt", include_in_schema=False)
+async def robots():
+    content = "User-agent: *\nAllow: /\nSitemap: https://indiasearch.site/sitemap.xml"
+    from fastapi.responses import PlainTextResponse
+    return PlainTextResponse(content)
+
 # Finally, mount the frontend directory to serve app.js, style.css, etc.
 app.mount("/", StaticFiles(directory=FRONTEND_PATH), name="frontend")

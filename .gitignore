@@ -21,6 +21,7 @@ firebase-credentials.json
 *.json
 !railway.json
 !plugin.json
+!frontend/manifest.json
 
 # Logs & PIDs
 *.log
