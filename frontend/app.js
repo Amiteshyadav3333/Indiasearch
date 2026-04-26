@@ -4,8 +4,11 @@
 
 const isLocalHost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
 const LOCAL_API_BASE = "http://127.0.0.1:8000";
-const PROD_API_BASE = "https://indiasearch-production.up.railway.app";
-let activeApiBase = isLocalHost ? LOCAL_API_BASE : PROD_API_BASE;
+const PROD_API_BASES = [
+  "https://indiasearch.onrender.com",
+  "https://indiasearch-production.up.railway.app"
+];
+let activeApiBase = isLocalHost ? LOCAL_API_BASE : PROD_API_BASES[0];
 
 // ── Firebase Config (Update with your own keys) ──
 const firebaseConfig = {
@@ -278,38 +281,30 @@ window.addEventListener("scroll", () => {
 });
 
 // ── Fetch helpers ──
-async function fetchWithApiFallback(path) {
+async function fetchWithApiFallback(path, options = {}) {
   const candidates = isLocalHost
-    ? [activeApiBase, PROD_API_BASE].filter((b, i, a) => a.indexOf(b) === i)
-    : [activeApiBase];
+    ? [LOCAL_API_BASE, ...PROD_API_BASES]
+    : [...PROD_API_BASES];
+    
+  candidates.sort((x, y) => x === activeApiBase ? -1 : y === activeApiBase ? 1 : 0);
+  
   let lastError = null;
   for (const base of candidates) {
     try {
-      const r = await fetch(`${base}${path}`);
+      const r = await fetch(`${base}${path}`, options);
       activeApiBase = base;
       return r;
     } catch (e) { lastError = e; }
   }
-  throw lastError || new Error("Failed to reach the backend service");
+  throw lastError || new Error("Failed to reach any backend service");
 }
 
 async function apiJsonRequest(path, payload, method = "POST") {
-  const candidates = isLocalHost
-    ? [activeApiBase, PROD_API_BASE].filter((b, i, a) => a.indexOf(b) === i)
-    : [activeApiBase];
-  let lastError = null;
-  for (const base of candidates) {
-    try {
-      const r = await fetch(`${base}${path}`, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: payload ? JSON.stringify(payload) : undefined
-      });
-      activeApiBase = base;
-      return r;
-    } catch (e) { lastError = e; }
-  }
-  throw lastError || new Error("Failed to reach the backend service");
+  return fetchWithApiFallback(path, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: payload ? JSON.stringify(payload) : undefined
+  });
 }
 
 // ═══════════════════════════════════════════
@@ -596,7 +591,7 @@ async function triggerVisualSearch(file) {
   if (authState.sessionToken) formData.append("session_token", authState.sessionToken);
 
   try {
-    const res = await fetch(`${activeApiBase}/visual-search`, {
+    const res = await fetchWithApiFallback(`/visual-search`, {
       method: "POST",
       body: formData
     });
@@ -632,7 +627,7 @@ if (pdfInput) {
     formData.append("session_token", finalSess);
 
     try {
-      const res = await fetch(`${activeApiBase}/upload-pdf`, {
+      const res = await fetchWithApiFallback(`/upload-pdf`, {
         method: "POST",
         body: formData
       });
@@ -1296,10 +1291,10 @@ async function submitSignin() {
 
   try {
     setAuthMessage("Authenticating with IndiaSearch...");
-    const res = await fetch(`${API_BASE}/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ identifier: email, password, captcha_code: captcha })
+    const res = await apiJsonRequest(`/auth/login`, { 
+      identifier: email, 
+      password, 
+      captcha_code: captcha 
     });
     
     const data = await res.json();
@@ -1332,10 +1327,8 @@ async function requestSignupLink() {
 
   try {
     setAuthMessage("Sending secure verification link...");
-    const res = await fetch(`${API_BASE}/auth/signup/request`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email })
+    const res = await apiJsonRequest(`/auth/signup/request`, { 
+      email: email
     });
     
     const data = await res.json();
@@ -1363,6 +1356,8 @@ async function requestSignupLink() {
 
 async function completeSignupVerification() {
   const password = document.getElementById("verifyPassword").value;
+  const verificationEmail = document.getElementById("verifyEmailDisplay").value;
+  const code = currentAuthToken;
   if (!password || password.length < 8) {
     setAuthMessage("Password must be at least 8 characters for security.", true);
     return;
@@ -1370,10 +1365,8 @@ async function completeSignupVerification() {
 
   try {
     setAuthMessage("Finalizing your account...");
-    const res = await fetch(`${API_BASE}/auth/signup/verify`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token: currentAuthToken, password })
+    const res = await apiJsonRequest(`/auth/signup/verify`, { 
+      token: currentAuthToken, password
     });
     
     const data = await res.json();
