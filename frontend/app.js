@@ -292,6 +292,9 @@ async function fetchWithApiFallback(path, options = {}) {
   for (const base of candidates) {
     try {
       const r = await fetch(`${base}${path}`, options);
+      if (!r.ok && (r.status === 502 || r.status === 503 || r.status === 504 || r.status === 500)) {
+         throw new Error(`Server ${base} returned ${r.status}`);
+      }
       activeApiBase = base;
       return r;
     } catch (e) { lastError = e; }
