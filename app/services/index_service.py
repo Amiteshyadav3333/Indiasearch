@@ -5,6 +5,10 @@ import re
 
 logger = logging.getLogger(__name__)
 
+import aiohttp
+from bs4 import BeautifulSoup
+import asyncio
+
 # ---------- CLEAN TEXT ----------
 def clean_text(text):
     if not text:
@@ -12,14 +16,33 @@ def clean_text(text):
     text = re.sub(r"\s+", " ", text)
     return text.strip()
 
-# ---------- SIMPLE SPAM DETECTOR ----------
+# ---------- ADVANCED SPAM DETECTOR ----------
 def is_spam(url, content):
     spam_words = [
-        "casino", "betting", "loan fast", "xxx",
-        "earn money fast", "porn", "viagra"
+        "casino", "betting", "loan fast", "xxx", "porn", "viagra", 
+        "sex", "escort", "slot", "satta", "matka", "gambling",
+        "free robux", "hack generator", "buy cheap", "adult dating"
     ]
     text = (str(url) + " " + str(content)).lower()
     return any(w in text for w in spam_words)
+
+# ---------- DEEP CRAWLER HELPER ----------
+async def fetch_page_text(url: str, default_text: str) -> str:
+    """Asynchronously fetches the full page content for deeper indexing."""
+    try:
+        async with aiohttp.ClientSession() as session:
+            # Short timeout so it doesn't hang
+            async with session.get(url, timeout=3) as resp:
+                if resp.status == 200 and "text/html" in resp.headers.get("Content-Type", ""):
+                    html = await resp.text()
+                    soup = BeautifulSoup(html, "html.parser")
+                    text = " ".join([p.get_text() for p in soup.find_all("p")])
+                    if text.strip():
+                        # Return snippet combined with full text, up to 10k chars
+                        return (default_text + " " + text)[:10000]
+    except Exception:
+        pass
+    return default_text
 
 # ---------- MAIN INDEX FUNCTION ----------
 async def index_results_async(results: list):
@@ -31,10 +54,11 @@ async def index_results_async(results: list):
         return
 
     indexed_count = 0
-    for r in results:
+    # Process only top 5 to keep background load light
+    for r in results[:5]:
         url = r.get("url")
         title = r.get("title")
-        snippet = r.get("snippet")
+        snippet = r.get("snippet", "")
         
         if not url or not title:
             continue
@@ -42,16 +66,22 @@ async def index_results_async(results: list):
         if is_spam(url, snippet):
             continue
             
+        # Deep Indexing: Fetch the full page content instead of just the snippet
+        full_content = await fetch_page_text(url, snippet)
+        
+        # Double check spam on full content
+        if is_spam(url, full_content):
+            continue
+
         doc = {
             "title": clean_text(title),
             "url": url,
-            "content": clean_text(snippet),
+            "content": clean_text(full_content),
             "indexed_at": "now",
             "source": r.get("source", "web_discovery")
         }
         
         # Use ElasticClient to index asynchronously
-        # Using a simple doc_id based on URL to avoid duplicates in ES
         import hashlib
         doc_id = hashlib.md5(url.encode()).hexdigest()
         
