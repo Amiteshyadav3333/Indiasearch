@@ -736,31 +736,9 @@ function getReadableHost(url, fallback = "Source") {
 }
 
 function renderAiSources(sources = []) {
-  if (!sources || sources.length === 0) return "";
-  
-  const cards = sources.map((src, i) => {
-    return `
-      <a href="${src.url}" target="_blank" class="ai-source-card" data-source-url="${src.url}">
-        <div class="ai-source-number">${i + 1}</div>
-        <div class="ai-source-content">
-          <div class="ai-source-title">${escapeHtml(src.title)}</div>
-          <div class="ai-source-host">${src.host}</div>
-        </div>
-      </a>
-    `;
-  }).join("");
-
-  return `
-    <div class="ai-sources-panel">
-      <div class="ai-sources-title">
-        <span>Sources</span>
-        <small>${sources.length} Verified References</small>
-      </div>
-      <div class="ai-sources-grid">
-        ${cards}
-      </div>
-    </div>
-  `;
+  // User requested to hide the sources panel/cards. 
+  // Citations [1], [2] will still appear inside the markdown answer.
+  return "";
 }
 
 function renderMarkdownWithCitations(markdown = "", sources = []) {
