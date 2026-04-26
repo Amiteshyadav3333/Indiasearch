@@ -834,6 +834,21 @@ async function search(pageNumber = 1, aiMode = false) {
     }
 
     if (data.error) {
+      if (data.requires_age_verification) {
+        resultsBox.innerHTML = `
+          <div class="age-verification-card" style="text-align: center; padding: 40px; background: var(--bg-card); border-radius: 16px; border: 1px solid var(--border); margin-top: 20px;">
+            <div style="font-size: 48px; margin-bottom: 15px;">🔞</div>
+            <h2 style="color: var(--text-primary); margin-bottom: 10px;">Age Verification Required</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 25px;">The content you are searching for requires you to be 18 years or older. Are you 18 or older?</p>
+            <div style="display: flex; gap: 15px; justify-content: center;">
+              <button onclick="confirmAgeAndSearch('${query}', ${pageNumber}, ${aiMode})" class="btn-primary" style="background: #ef4444; border-color: #ef4444; padding: 10px 30px;">Yes, I am 18+</button>
+              <button onclick="resetToHome()" class="btn-primary" style="background: var(--bg-alt); color: var(--text-primary); border-color: var(--border); padding: 10px 30px;">No, take me back</button>
+            </div>
+          </div>
+        `;
+        if (paginationContainer) paginationContainer.innerHTML = "";
+        return;
+      }
       resultsBox.innerHTML = `<div class="state-error"><span class="state-error-icon">⚠️</span>${await translateText(data.error, targetLang)}</div>`;
       return;
     }
@@ -1653,6 +1668,23 @@ function renderStockPanel(s) {
 // ═══════════════════════════════════════════
 // DOM READY
 // ═══════════════════════════════════════════
+function confirmAgeAndSearch(query, pageNumber, aiMode) {
+  // Store confirmation in session storage so we don't ask again this session
+  sessionStorage.setItem("age_verified", "true");
+  search(pageNumber, aiMode);
+}
+
+// Ensure the age_verified flag is sent if present
+const originalFetchWithApiFallback = fetchWithApiFallback;
+fetchWithApiFallback = async function(path, options = {}) {
+  if (sessionStorage.getItem("age_verified") === "true") {
+    const url = new URL(path, window.location.origin);
+    url.searchParams.set("age_verified", "true");
+    path = url.pathname + url.search;
+  }
+  return originalFetchWithApiFallback(path, options);
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   renderHistory();
   renderTrending();

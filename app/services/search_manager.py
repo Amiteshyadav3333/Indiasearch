@@ -141,7 +141,7 @@ def get_direct_hit(query: str) -> list:
         
     return []
 
-async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", lang: str = "en", force_ai: bool = False, pdf_content: str = None) -> dict:
+async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", lang: str = "en", force_ai: bool = False, pdf_content: str = None, age_verified: bool = False) -> dict:
     """
     Master Orchestrator implementing the user's requested architecture.
     """
@@ -149,6 +149,15 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
     
     # ── Step 0: Translate if needed ────────────────────────
     en_query, detected_lang = translator.translate_query_to_english(query)
+    
+    # ── Adult Content Check ────────────────────────────────
+    if not age_verified:
+        adult_keywords = ["porn", "sex", "xxx", "xvideos", "pornhub", "xhamster", "nude", "brazzers", "desi bhabhi"]
+        if any(keyword in en_query.lower() for keyword in adult_keywords):
+            return {
+                "error": "Adult content detected.",
+                "requires_age_verification": True
+            }
     
     # ── Step 1: Identify Intent ────────────────────────────
     intent = await identify_intent(en_query)
