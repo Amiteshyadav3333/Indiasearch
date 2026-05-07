@@ -98,6 +98,37 @@ async def identify_intent(query: str) -> str:
     # Finance Intent
     if any(k in q for k in ["stock", "price", "share", "nifty", "sensex", "market", "nasdaq", "crypto"]):
         return "finance"
+    # Nutrition Intent
+    if any(k in q for k in ["nutrition", "calories", "protein", "diet", "food info"]):
+        return "nutrition"
+        
+    # Sarkari Intent
+    if any(k in q for k in ["sarkari", "gov.in", "government scheme", "pm yojana", "sarkari yojana"]):
+        return "sarkari"
+
+    # Jobs Intent
+    if any(k in q for k in ["jobs", "vacancy", "recruitment", "naukri", "hiring"]):
+        return "jobs"
+
+    # Mandi Intent
+    if any(k in q for k in ["mandi", "crop price", "gehu ka bhav", "chawal price", "fasal"]):
+        return "mandi"
+
+    # IRCTC Intent
+    if any(k in q for k in ["irctc", "pnr status", "train status", "train running"]):
+        return "irctc"
+
+    # Aadhaar/PAN Intent
+    if any(k in q for k in ["aadhaar", "pan card", "uidai", "nsdl", "income tax"]):
+        return "aadhaar"
+
+    # Jugaad/Local Intent
+    if any(k in q for k in ["jugaad", "repair shop", "mechanic near me", "electrician near me", "plumber"]):
+        return "jugaad"
+
+    # Courts Intent
+    if any(k in q for k in ["court case status", "ecourts", "high court", "supreme court status"]):
+        return "courts"
     
     return "general"
 
@@ -106,6 +137,17 @@ def get_direct_hit(query: str) -> list:
     Returns a 'Direct Hit' result if the query looks like a domain or major brand.
     """
     q = query.lower().strip()
+    
+    # Custom About IndiaSearch
+    if q in ["about indiasearch", "who created indiasearch", "indiasearch", "founder of indiasearch", "indiasearch team"]:
+        return [{
+            "title": "About IndiaSearch 🇮🇳",
+            "url": "https://indiasearch.site",
+            "snippet": "IndiaSearch was created by Amitesh Kumar Yadav and students of Gurukul Kangri University. Yeh platform specially India ke local businesses ko badhawa dene ke liye design kiya gaya hai, aur jobs search ke liye ise specially optimize kiya gaya hai. We offer multiple services including our AI search engine, downloader.indiasearch, and chat.indiasearch.site. Built with love in India.",
+            "source": "direct_hit",
+            "image": "about-indiasearch.jpg", # The user will upload this picture to frontend
+            "_boost": 100
+        }]
     
     # Common TLDs to detect domains (more robust regex)
     if re.search(r"\.[a-z]{2,12}$", q) or q.startswith("www."):
@@ -143,7 +185,7 @@ def get_direct_hit(query: str) -> list:
         
     return []
 
-async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", lang: str = "en", force_ai: bool = False, pdf_content: str = None, age_verified: bool = False) -> dict:
+async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", lang: str = "en", force_ai: bool = False, pdf_content: str = None, age_verified: bool = False, advanced_mode: bool = False, history: list = None) -> dict:
     """
     Master Orchestrator implementing the user's requested architecture.
     """
@@ -163,15 +205,32 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
     
     # ── Step 1: Identify Intent ────────────────────────────
     intent = await identify_intent(en_query)
-    if filter == "news":
-        intent = "news"
-    elif filter == "weather":
-        intent = "weather"
-    elif filter == "score":
-        intent = "sports"
-    elif filter in ["stock", "finance"]:
-        intent = "finance"
+    
+    # Map explicit filters to intent
+    filter_intent_map = {
+        "news": "news", "weather": "weather", "score": "sports", 
+        "stock": "finance", "finance": "finance", "sarkari": "sarkari",
+        "jobs": "jobs", "mandi": "mandi", "irctc": "irctc",
+        "aadhaar": "aadhaar", "jugaad": "jugaad", "courts": "courts",
+        "nutrition": "nutrition"
+    }
+    if filter in filter_intent_map:
+        intent = filter_intent_map[filter]
+        
+    if advanced_mode: force_ai = True
     if force_ai: intent = "ai"
+    
+    # ── Modify Query Based on Restricted Filters ───────────
+    if intent == "sarkari" or filter == "sarkari":
+        en_query = f"{en_query} (site:gov.in OR site:nic.in OR site:india.gov.in)"
+    elif intent == "jobs" or filter == "jobs":
+        en_query = f"{en_query} jobs (site:naukri.com OR site:linkedin.com/jobs OR site:sarkariresult.com)"
+    elif intent == "courts" or filter == "courts":
+        en_query = f"{en_query} (site:ecourts.gov.in OR site:indiancourts.nic.in)"
+    elif intent == "aadhaar" or filter == "aadhaar":
+        en_query = f"{en_query} (site:uidai.gov.in OR site:incometax.gov.in)"
+    elif intent == "irctc" or filter == "irctc":
+        en_query = f"{en_query} (site:irctc.co.in OR site:indianrail.gov.in)"
     
     logger.info(f"[Brain] Query: {query!r} | Intent: {intent} | Lang: {detected_lang}")
 
@@ -316,7 +375,9 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
             docs=final_ranked, 
             ai_mode=True, 
             lang=("Hindi" if detected_lang == "hi" else "English"),
-            pdf_content=pdf_content
+            pdf_content=pdf_content,
+            intent=intent,
+            history=history
         )
 
     # ── Level 7: Retrieve Knowledge Panel ────────
@@ -327,9 +388,24 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
         except:
             pass
 
+    # ── Level 0: Hardcoded Brand Logic (Amitesh Kumar Yadav) ──
+    brand_keywords = ["founder", "creator", "owner", "developed by", "made by", "who made", "kisne banaya", "about", "team"]
+    q_low = query.lower()
+    if ("indiasearch" in q_low or "india search" in q_low) and any(k in q_low for k in brand_keywords):
+        knowledge_panel = {
+            "title": "Amitesh Kumar Yadav",
+            "subtitle": "Founder & Developer of IndiaSearch",
+            "snippet": "IndiaSearch was created by Amitesh Kumar Yadav and students of Gurukul Kangri University. Yeh platform specially India ke local businesses ko badhawa dene ke liye design kiya gaya hai, aur jobs search ke liye ise specially optimize kiya gaya hai. We offer multiple services including our AI search engine, downloader.indiasearch, and chat.indiasearch.site. Built with love in India.",
+            "image": "/about-indiasearch.jpg",
+            "url": "https://chat.indiasearch.site"
+        }
+
     # Final pagination
-    offset = (page - 1) * MAX_WEB_RESULTS
-    paginated = final_ranked[offset : offset + MAX_WEB_RESULTS]
+    if advanced_mode or intent == "nutrition":
+        paginated = final_ranked[:4] # Only 4 highly accurate links for specialized searches
+    else:
+        offset = (page - 1) * MAX_WEB_RESULTS
+        paginated = final_ranked[offset : offset + MAX_WEB_RESULTS]
 
     took_ms = round((time.time() - start_time) * 1000, 1)
     

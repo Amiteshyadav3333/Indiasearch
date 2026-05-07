@@ -38,6 +38,7 @@ const aiSearchInput = document.getElementById("aiSearchInput");
 const searchBoxStandard = document.getElementById("searchBoxStandard");
 const searchBoxAi = document.getElementById("searchBoxAi");
 const aiPdfPreview = document.getElementById("aiPdfPreview");
+const micButtonAi = document.getElementById("micButtonAi");
 const mainWrap = document.querySelector(".main-wrap");
 
 const heroSection = document.getElementById("heroSection");
@@ -46,6 +47,9 @@ const trendingContainer = document.getElementById("trendingContainer");
 const historyBox = document.getElementById("searchHistory");
 const paginationContainer = document.getElementById("pagination");
 const siteHeader = document.getElementById("siteHeader");
+
+let advancedMode = false;
+let chatHistory = []; // Global chat history for AI Mode
 
 /** ── AI Mode Manager ── **/
 function enterAiMode() {
@@ -60,7 +64,26 @@ function enterAiMode() {
     }
 }
 
+function enterAdvancedSearch() {
+    advancedMode = true;
+    enterAiMode();
+    aiSearchInput.placeholder = "Advanced AI Search: Only 2-4 verified sources...";
+}
+
+function enterNutritionScan() {
+    // Clear previous results to make space for the "Direct" scanner experience
+    resultsBox.innerHTML = "";
+    aiSummaryBox.innerHTML = "";
+    if (searchFiltersDiv) searchFiltersDiv.style.display = "flex";
+    if (heroSection) heroSection.classList.add("hidden");
+    
+    // Direct camera open
+    startLiveScan();
+}
+
 function exitAiMode() {
+    advancedMode = false;
+    if (aiSearchInput) aiSearchInput.placeholder = "Puchho jo aapke mann mein hai... (AI Mode)";
     if (searchBoxStandard) searchBoxStandard.style.display = "flex";
     if (searchBoxAi) {
         searchBoxAi.style.display = "none";
@@ -76,7 +99,11 @@ function autoExpand(t) {
 
 function searchAI() {
     if (!aiSearchInput || !aiSearchInput.value.trim()) return;
-    searchInput.value = aiSearchInput.value;
+    const val = aiSearchInput.value.trim();
+    searchInput.value = val;
+    
+    // Save user message to history
+    chatHistory.push({ role: "user", content: val });
     
     // Clear and reset AI input immediately for next question
     aiSearchInput.value = "";
@@ -371,7 +398,7 @@ function saveHistory(query) {
 const TRENDING_KEYWORDS = [
   "Latest tech jobs in India 2026",
   "Generative AI free courses",
-  "Ind VS Aus Live Score",
+  "Cricket Live Score",
   "Best smartphones under 20000",
   "Python Developer salaries",
   "Top startups in Bangalore"
@@ -382,7 +409,7 @@ function renderTrending() {
   if (!grid) return;
   grid.innerHTML = TRENDING_KEYWORDS.map(k => `
     <div class="trending-item" onclick="searchInput.value='${k}'; search();">
-      <span class="trending-icon">🔥</span>${k}
+      <span class="trending-icon">📈</span>${k}
     </div>`).join("");
 }
 
@@ -393,6 +420,17 @@ let currentFilter = "all";
 
 function setFilter(type) {
   currentFilter = type;
+  
+  if (type === "advanced") {
+      advancedMode = true;
+      enterAiMode();
+  } else if (type === "nutrition") {
+      advancedMode = false;
+      enterNutritionScan();
+  } else {
+      advancedMode = false;
+  }
+
   document.querySelectorAll(".filter-pill").forEach(b => b.classList.remove("active"));
   const btn = document.querySelector(`.filter-pill[data-filter="${type}"]`);
   if (btn) btn.classList.add("active");
@@ -401,10 +439,23 @@ function setFilter(type) {
     news: "latest india news",
     weather: "weather in Delhi",
     score: "live cricket score",
-    stock: "reliance stock price"
+    stock: "reliance stock price",
+    sarkari: "latest government schemes and portals",
+    jobs: "latest sarkari and private jobs",
+    mandi: "latest crop mandi prices",
+    irctc: "irctc train running status",
+    aadhaar: "aadhaar pan link status",
+    jugaad: "plumber electrician mechanic near me",
+    courts: "high court supreme court case status",
+    nutrition: "calories and nutrition calculator"
   };
   if (searchInput && !searchInput.value.trim() && defaultQueries[type]) {
     searchInput.value = defaultQueries[type];
+  }
+
+  if (type === "nutrition") {
+    startLiveScan();
+    return;
   }
 
   search(1, false);
@@ -434,7 +485,7 @@ const STT_LOCALES = {
   en: "en-IN", hi: "hi-IN", as: "as-IN", bn: "bn-IN", brx: "en-IN", doi: "en-IN",
   gu: "gu-IN", kn: "kn-IN", ks: "ur-IN", gom: "mr-IN", mai: "hi-IN", ml: "ml-IN",
   mni: "en-IN", mr: "mr-IN", ne: "ne-NP", or: "or-IN", pa: "pa-IN", sa: "hi-IN",
-  sat: "en-IN", sd: "ur-IN", ta: "ta-IN", te: "te-IN", ur: "ur-IN"
+  sat: "en-IN", sd: "ur-IN", ta: "ta-IN", te: "te-IN", ur: "ur-IN", bh: "bh-IN"
 };
 
 if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
@@ -445,20 +496,31 @@ if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
   recognition.onstart = () => {
     isListening = true;
     micButton.classList.add("listening");
-    searchInput.placeholder = "सुन रहा हूँ… Listening…";
+    if (micButtonAi) micButtonAi.classList.add("listening");
+    const target = (searchBoxAi && searchBoxAi.style.display !== "none") ? aiSearchInput : searchInput;
+    target.placeholder = "सुन रहा हूँ… Listening…";
   };
   recognition.onresult = e => {
-    searchInput.value = e.results[0][0].transcript;
-    search();
+    const transcript = e.results[0][0].transcript;
+    if (searchBoxAi && searchBoxAi.style.display !== "none") {
+        aiSearchInput.value = transcript;
+        searchAI();
+    } else {
+        searchInput.value = transcript;
+        search();
+    }
   };
   recognition.onend = () => {
     isListening = false;
     micButton.classList.remove("listening");
-    searchInput.placeholder = "Kuch bhi search karo…";
+    if (micButtonAi) micButtonAi.classList.remove("listening");
+    if (searchInput) searchInput.placeholder = "Kuch bhi search karo…";
+    if (aiSearchInput) aiSearchInput.placeholder = "Puchho jo aapke mann mein hai... (AI Mode)";
   };
   recognition.onerror = () => {
     isListening = false;
     micButton.classList.remove("listening");
+    if (micButtonAi) micButtonAi.classList.remove("listening");
   };
 }
 
@@ -594,17 +656,68 @@ async function triggerVisualSearch(file) {
   if (authState.sessionToken) formData.append("session_token", authState.sessionToken);
 
   try {
+    if (currentFilter === "nutrition") {
+        if (scanStatus) scanStatus.innerHTML = `<div class="dna-spinner"></div> 🧬 Gemini 1.5 Flash: Scanning for Nutritional DNA...`;
+        const b64 = await compressImage(file);
+        const data = await analyzeNutritionByImage(b64);
+        if (data.name) {
+            if (scanStatus) scanStatus.innerHTML = `✨ <b>Food Identified:</b> ${data.name}`;
+            searchInput.value = data.name;
+            resultsBox.innerHTML = "";
+            aiSummaryBox.innerHTML = renderNutritionPanel(data);
+            
+            // Layout adjustments for "Direct" feel
+            if (searchFiltersDiv) searchFiltersDiv.style.display = "flex";
+            if (trendingContainer) trendingContainer.style.display = "none";
+            if (historyBox) historyBox.style.display = "none";
+            if (heroSection) heroSection.classList.add("hidden");
+            if (mainWrap) mainWrap.scrollTop = 0;
+            return;
+        }
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+    if (authState.sessionToken) formData.append("session_token", authState.sessionToken);
+
     const res = await fetchWithApiFallback(`/visual-search`, {
       method: "POST",
       body: formData
     });
     const data = await res.json();
     if (res.ok) {
-      if (scanStatus) scanStatus.innerHTML = `✨ <b>Recognition Complete:</b> ${data.identity || "Possible matches found below."}`;
-      // Put recognition result in search bar and trigger AI Mode with social keywords
-      const identityQuery = data.identity || `Search for details about ${file.name}`;
-      searchInput.value = `${identityQuery} official social media links instagram facebook twitter x`;
-      search(1, true); // Automatic Ask AI trigger
+      const identityStr = data.identity || "";
+      // ... rest of the recognition logic (keeping for non-nutrition)
+      
+      // Check if it's Nutrition AI JSON response
+      let nutritionData = null;
+      if (identityStr.includes("```json")) {
+         try {
+           const jsonStr = identityStr.split("```json")[1].split("```")[0];
+           const parsed = JSON.parse(jsonStr);
+           if (parsed.intent === "nutrition") {
+               nutritionData = parsed;
+           }
+         } catch(e){}
+      }
+
+      if (nutritionData) {
+         if (scanStatus) scanStatus.innerHTML = `✨ <b>Nutrition Analyzed:</b> ${nutritionData.food_name}`;
+         searchInput.value = `Nutrition info for ${nutritionData.food_name}`;
+         // Render the nutrition panel directly
+         resultsBox.innerHTML = "";
+         aiSummaryBox.innerHTML = renderNutritionPanel(nutritionData);
+         if (searchFiltersDiv) searchFiltersDiv.style.display = "flex";
+         if (trendingContainer) trendingContainer.style.display = "none";
+         if (historyBox) historyBox.style.display = "none";
+         if (heroSection) heroSection.classList.add("hidden");
+      } else {
+         if (scanStatus) scanStatus.innerHTML = `✨ <b>Recognition Complete:</b> ${data.identity || "Possible matches found below."}`;
+         // Put recognition result in search bar and trigger AI Mode with social keywords
+         const identityQuery = data.identity || `Search for details about ${file.name}`;
+         searchInput.value = `${identityQuery} official social media links instagram facebook twitter x`;
+         search(1, true); // Automatic Ask AI trigger
+      }
     } else {
       throw new Error(data.error || "Recognition failed");
     }
@@ -674,6 +787,7 @@ if (pdfInput) {
 // HOME RESET & CLEANUP
 // ═══════════════════════════════════════════
 async function resetToHome() {
+  chatHistory = [];
   searchInput.value = "";
   resultsBox.innerHTML = "";
   aiSummaryBox.innerHTML = "";
@@ -812,8 +926,25 @@ async function search(pageNumber = 1, aiMode = false) {
   aiSummaryBox.innerHTML = "";
 
   try {
+    if (currentFilter === "nutrition" && pageNumber === 1) {
+      if (aiSummaryBox) aiSummaryBox.innerHTML = `<div class="loading-ai">⏳ Claude is analyzing ${query}...</div>`;
+      const data = await analyzeNutritionByText(query);
+      if (data.name) {
+          resultsBox.innerHTML = "";
+          aiSummaryBox.innerHTML = renderNutritionPanel(data);
+          return;
+      }
+    }
+
     document.documentElement.setAttribute("data-ai-mode", aiMode ? "true" : "false");
-    const params = new URLSearchParams({ q: query, page: String(pageNumber), filter: currentFilter, ai_mode: String(aiMode) });
+    const params = new URLSearchParams({ 
+        q: query, 
+        page: String(pageNumber), 
+        filter: currentFilter, 
+        ai_mode: String(aiMode),
+        advanced_mode: String(advancedMode),
+        history: aiMode ? JSON.stringify(chatHistory) : ""
+    });
     const finalSess = authState.sessionToken || authState.guestId;
     params.set("session_token", finalSess);
 
@@ -866,13 +997,22 @@ async function search(pageNumber = 1, aiMode = false) {
       rawText = typeof data.ai_summary === 'string' ? data.ai_summary : (data.ai_summary.answer || String(data.ai_summary));
       if (aiMode || data.intent === 'ai') {
         shouldAnimate = true;
-        summaryHtml = `
-          <div class="ai-overview-card">
-            <div class="ai-overview-header">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="url(#ai-grad)" stroke-width="2.5"><defs><linearGradient id="ai-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#3b82f6" /><stop offset="100%" stop-color="#8b5cf6" /></linearGradient></defs><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-              <span style="background: linear-gradient(90deg, #3b82f6, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">IndiaSearch AI</span>
+        
+        // Render FULL HISTORY for AI Mode
+        let historyHtml = chatHistory.slice(0, -1).map(msg => `
+            <div class="chat-msg ${msg.role}">
+                <div class="chat-msg-icon">${msg.role === 'user' ? '👤' : '✨'}</div>
+                <div class="chat-msg-text">${msg.role === 'assistant' ? renderMarkdownWithCitations(msg.content) : msg.content}</div>
             </div>
-            <div class="ai-overview-text" id="streamingAI"></div>
+        `).join("");
+
+        summaryHtml = `
+          <div class="ai-chat-container">
+            ${historyHtml}
+            <div class="chat-msg assistant">
+                <div class="chat-msg-icon">✨</div>
+                <div class="chat-msg-text" id="streamingAI"></div>
+            </div>
             ${aiSourcesHtml}
           </div>`;
       } else {
@@ -928,7 +1068,23 @@ async function search(pageNumber = 1, aiMode = false) {
               setTimeout(typeWriter, speed);
               if (mainWrap) mainWrap.scrollTop = mainWrap.scrollHeight;
            } else {
-              target.innerHTML = renderMarkdownWithCitations(rawText, aiSources); // Run through markdown parser once done
+              if (rawText.includes("```json") && rawText.includes('"intent": "nutrition"')) {
+                  try {
+                      const jsonStr = rawText.split("```json")[1].split("```")[0];
+                      const parsed = JSON.parse(jsonStr);
+                      target.innerHTML = renderNutritionPanel(parsed);
+                  } catch(e) {
+                      target.innerHTML = renderMarkdownWithCitations(rawText, aiSources);
+                  }
+              } else {
+               const finalMd = renderMarkdownWithCitations(rawText, aiSources);
+               target.innerHTML = finalMd; // Run through markdown parser once done
+               
+               // After typing is done, push to history if not already there
+               if (aiMode) {
+                   chatHistory.push({ role: "assistant", content: rawText });
+               }
+            }
            }
         }
         typeWriter();
@@ -936,7 +1092,7 @@ async function search(pageNumber = 1, aiMode = false) {
     }
 
     // ── Special Panels Integration (Weather, Sports, Finance) ──
-    if (data.special_data && pageNumber === 1) {
+    if (data.special_data && pageNumber === 1 && !aiMode) {
       let specialHtml = "";
       if (data.intent === 'weather') {
         specialHtml = renderWeatherPanel(data.special_data);
@@ -1098,6 +1254,26 @@ async function search(pageNumber = 1, aiMode = false) {
                 <a href="${item.url}" target="_blank" class="news-open-link" onclick="event.stopPropagation()">Open →</a>
               </div>
               <div id="article-inline-${i}" style="display:none;" onclick="event.stopPropagation()"></div>
+            </div>
+          </div>`;
+      }
+
+      // ── Custom About IndiaSearch Card ──
+      if (item.source === "direct_hit" && item.title.includes("About IndiaSearch")) {
+        return `
+          <div class="about-indiasearch-card animate-slide-up" style="animation-delay: ${i * 0.05}s; margin-bottom: 24px;">
+            <div class="about-card-inner">
+                <div class="about-card-image">
+                    <img src="${item.image}" alt="IndiaSearch Team" onerror="this.src='https://via.placeholder.com/150?text=Team+IndiaSearch'">
+                </div>
+                <div class="about-card-content">
+                    <a href="${escapeHtml(item.url)}" target="_blank" class="result-title" style="font-size: 22px;">${tt}</a>
+                    <p class="result-snippet" style="margin: 10px 0 20px;">${ts}</p>
+                    <div class="about-links">
+                        <a href="https://downloader.indiasearch.site" target="_blank" class="about-link-btn">⬇️ Downloader</a>
+                        <a href="https://chat.indiasearch.site" target="_blank" class="about-link-btn">💬 Chat App</a>
+                    </div>
+                </div>
             </div>
           </div>`;
       }
@@ -1567,6 +1743,113 @@ function renderWeatherPanel(w) {
   `;
 }
 
+function renderStockPanel(s) {
+    if (!s) return "";
+    return `
+      <div class="stock-card animate-slide-up">
+        <h3>${s.symbol || "Stock"}</h3>
+        <p class="stock-price">₹${s.price || "N/A"}</p>
+        <p class="stock-change ${s.change > 0 ? "positive" : "negative"}">${s.change > 0 ? "▲" : "▼"} ${Math.abs(s.change)}%</p>
+      </div>`;
+}
+
+function renderNutritionPanel(n) {
+    if (!n) return "";
+    
+    // Support both old and new schema
+    const name = n.name || n.food_name || "Food Item";
+    const desc = n.description || "";
+    const cals = n.calories || "N/A";
+    const nutrients = n.nutrients || {
+        protein: n.protein || "0", 
+        carbs: n.carbs || "0", 
+        fat: n.fat || "0",
+        fiber: n.fiber || "0", 
+        sugar: n.sugar || "0", 
+        sodium: n.sodium || "0"
+    };
+    const dv = n.daily_values || {
+        protein: 0, carbs: 0, fat: 0
+    };
+    const tags = n.tags || n.health_tags || [];
+    const colors = n.tag_colors || tags.map(() => "green");
+    const tip = n.tip || n.hindi_tip || "";
+
+    const tagsHtml = tags.map((t, i) => {
+        const color = colors[i] || "green";
+        const colorMap = { green: "#10b981", amber: "#f59e0b", red: "#ef4444" };
+        const bgMap = { green: "rgba(16,185,129,0.1)", amber: "rgba(245,158,11,0.1)", red: "rgba(239,68,68,0.1)" };
+        const activeColor = colorMap[color] || colorMap.green;
+        const activeBg = bgMap[color] || bgMap.green;
+        return `<span class="health-tag" style="background:${activeBg}; color:${activeColor}; border:1px solid ${activeColor}33; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700;">${t}</span>`;
+    }).join("");
+    
+    const pPercent = dv.protein || 0;
+    const cPercent = dv.carbs || 0;
+    const fPercent = dv.fat || 0;
+
+    return `
+      <div class="nutrition-card animate-slide-up" style="background:var(--bg-card); border:1px solid var(--border); border-radius:24px; padding:24px; box-shadow:0 10px 30px rgba(0,0,0,0.1); margin-bottom:20px;">
+        <div class="nutrition-header" style="display:flex; justify-content:space-between; align-items:start; margin-bottom:15px;">
+            <div>
+                <h3 style="font-size:22px; margin:0;">${name}</h3>
+                <p style="font-size: 12px; color: var(--text-muted); font-weight:500; margin-top:4px;">
+                    ${desc}
+                </p>
+            </div>
+            <div class="nutrition-calories" style="font-size:26px; font-weight:800; color:#f59e0b;">${cals} <span style="font-size:12px; font-weight:400; color:var(--text-muted);">kcal</span></div>
+        </div>
+        
+        <div class="nutrition-tags" style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">${tagsHtml}</div>
+
+        <div class="nutrition-bars" style="margin: 25px 0;">
+            <div class="nut-bar-item" style="margin-bottom:15px;">
+                <div class="nut-bar-label" style="display:flex; justify-content:space-between; font-size:12px; font-weight:700; margin-bottom:6px;">
+                    <span>Protein</span><span style="color:#10b981;">${nutrients.protein}g</span>
+                </div>
+                <div class="nut-bar-bg" style="height:10px; background:rgba(0,0,0,0.05); border-radius:10px; overflow:hidden;">
+                    <div class="nut-bar-fill" style="width: ${pPercent}%; height:100%; background:#10b981; border-radius:10px; transition: width 1s ease;"></div>
+                </div>
+            </div>
+            <div class="nut-bar-item" style="margin-bottom:15px;">
+                <div class="nut-bar-label" style="display:flex; justify-content:space-between; font-size:12px; font-weight:700; margin-bottom:6px;">
+                    <span>Carbs</span><span style="color:#f59e0b;">${nutrients.carbs}g</span>
+                </div>
+                <div class="nut-bar-bg" style="height:10px; background:rgba(0,0,0,0.05); border-radius:10px; overflow:hidden;">
+                    <div class="nut-bar-fill" style="width: ${cPercent}%; height:100%; background:#f59e0b; border-radius:10px; transition: width 1s ease;"></div>
+                </div>
+            </div>
+            <div class="nut-bar-item">
+                <div class="nut-bar-label" style="display:flex; justify-content:space-between; font-size:12px; font-weight:700; margin-bottom:6px;">
+                    <span>Fat</span><span style="color:#ef4444;">${nutrients.fat}g</span>
+                </div>
+                <div class="nut-bar-bg" style="height:10px; background:rgba(0,0,0,0.05); border-radius:10px; overflow:hidden;">
+                    <div class="nut-bar-fill" style="width: ${fPercent}%; height:100%; background:#ef4444; border-radius:10px; transition: width 1s ease;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="nutrition-grid mini" style="display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; margin-bottom:25px;">
+            <div class="nut-item" style="background:var(--bg-alt); padding:12px; border-radius:16px; text-align:center; border:1px solid var(--border);">
+                <span style="display:block; font-size:11px; color:var(--text-muted); margin-bottom:4px;">Fiber</span>
+                <strong style="font-size:16px;">${nutrients.fiber || "0"}g</strong>
+            </div>
+            <div class="nut-item" style="background:var(--bg-alt); padding:12px; border-radius:16px; text-align:center; border:1px solid var(--border);">
+                <span style="display:block; font-size:11px; color:var(--text-muted); margin-bottom:4px;">Sugar</span>
+                <strong style="font-size:16px;">${nutrients.sugar || "0"}g</strong>
+            </div>
+            <div class="nut-item" style="background:var(--bg-alt); padding:12px; border-radius:16px; text-align:center; border:1px solid var(--border);">
+                <span style="display:block; font-size:11px; color:var(--text-muted); margin-bottom:4px;">Sodium</span>
+                <strong style="font-size:16px;">${nutrients.sodium || "0"}mg</strong>
+            </div>
+        </div>
+
+        ${tip ? `<div class="nutrition-tip" style="background:rgba(59,130,246,0.08); padding:18px; border-radius:18px; font-size:14px; line-height:1.6; border-left:5px solid #3b82f6; color:var(--text-primary);">
+            💡 <b>Expert AI Tip:</b> ${tip}
+        </div>` : ""}
+      </div>`;
+}
+
 function renderSportsPanel(matches) {
   if (!matches || matches.length === 0) return "";
   
@@ -1696,3 +1979,46 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 // Final Initialization
 updateUserUI();
+
+// ===== CALORY SCANNER (Anthropic Claude Optimized) =====
+
+function showCaloryScanner() {
+  const results = document.getElementById('results');
+  const calSection = document.getElementById('calory-section');
+  if (results) results.style.display = 'none';
+  if (calSection) calSection.style.display = 'block';
+}
+
+async function analyzeNutritionByText(query) {
+  const res = await fetch('/api/nutrition/text', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query })
+  });
+  return await res.json();
+}
+
+async function analyzeNutritionByImage(base64, mediaType = 'image/jpeg') {
+  const res = await fetch('/api/nutrition/image', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image_base64: base64, media_type: mediaType })
+  });
+  return await res.json();
+}
+
+function compressImage(file, maxWidth = 800) {
+  return new Promise((resolve) => {
+    const canvas = document.createElement('canvas');
+    const img = new Image();
+    img.onload = () => {
+      const ratio = Math.min(maxWidth / img.width, 1);
+      canvas.width = img.width * ratio;
+      canvas.height = img.height * ratio;
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      const base64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+      resolve(base64);
+    };
+    img.src = URL.createObjectURL(file);
+  });
+}

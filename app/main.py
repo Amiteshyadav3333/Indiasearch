@@ -33,6 +33,7 @@ from app.services import ai_service as ai_summary
 from app.utils import translator
 from app.services.crawler_service import Crawler, SEED_URLS
 from app.cache import hot_query_store
+from app.api import nutrition
 
 # --- Logging Setup ---
 logging.basicConfig(
@@ -44,6 +45,7 @@ logger = logging.getLogger("IndiasearchAPI")
 
 # --- App Initialization ---
 app = FastAPI(title="IndiaSearch Intelligent Engine")
+app.include_router(nutrition.router)
 auth_store.init_db()
 
 app.add_middleware(
@@ -143,7 +145,7 @@ def public_user(user: dict):
 
 # --- SEARCH ROUTE (The Brain) ---
 @app.get("/search")
-async def search(q: str, page: int = 1, filter: str = "all", ai_mode: bool = False, session_token: str | None = None, age_verified: str = "false"):
+async def search(q: str, page: int = 1, filter: str = "all", ai_mode: bool = False, advanced_mode: bool = False, session_token: str | None = None, age_verified: str = "false", history: str | None = None):
     """
     Intelligent Search Brain Entry Point.
     Orchestrates Multi-level search (Cache -> Local/Free Web -> Paid Fallback).
@@ -159,6 +161,14 @@ async def search(q: str, page: int = 1, filter: str = "all", ai_mode: bool = Fal
         if pdf_content:
             logger.info(f"[Search] PDF Context ACTIVE for session {sess_key} (len: {len(pdf_content)})")
 
+        # Parse History if provided
+        history_list = None
+        if history:
+            try:
+                history_list = json.loads(history)
+            except:
+                logger.warning("[Search] Failed to parse history JSON")
+
         # Execute the Intelligent Pipeline
         response = await run_parallel_pipeline(
             query=q, 
@@ -167,7 +177,9 @@ async def search(q: str, page: int = 1, filter: str = "all", ai_mode: bool = Fal
             lang="en", 
             force_ai=force_ai,
             pdf_content=pdf_content,
-            age_verified=(age_verified == "true")
+            age_verified=(age_verified == "true"),
+            advanced_mode=advanced_mode,
+            history=history_list
         )
         
         # Save history if logged in
