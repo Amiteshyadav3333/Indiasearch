@@ -47,10 +47,12 @@ def gemini_chat(query, docs, lang="English", pdf_content=None, intent="general",
     pdf_info = f"\n--- CORE DOCUMENT CONTENT ---\n{pdf_content}\n" if pdf_content else ""
 
     if intent == "nutrition":
-        system_msg = """You are IndiaSearch Nutritionist. For the given food query, provide nutritional analysis EXCLUSIVELY in JSON format:
-        { "intent": "nutrition", "name": "Hindi + English", "calories": 100, "nutrients": {"protein": 0, "carbs": 0, "fat": 0, "fiber": 0, "sugar": 0, "sodium": 0}, "daily_values": {"protein": 0, "carbs": 0, "fat": 0}, "tags": [], "tip": "..." }"""
+        system_msg = f"""You are IndiaSearch Nutritionist. For the given food query, provide nutritional analysis EXCLUSIVELY in JSON format.
+        All human-readable values such as name, tags, description, and tip must be in {lang}.
+        {{ "intent": "nutrition", "name": "food name in {lang}", "calories": 100, "nutrients": {{"protein": 0, "carbs": 0, "fat": 0, "fiber": 0, "sugar": 0, "sodium": 0}}, "daily_values": {{"protein": 0, "carbs": 0, "fat": 0}}, "tags": [], "tip": "..." }}"""
     else:
         system_msg = f"""You are IndiaSearch Precise Engine. Answer clearly in {lang}. Use citations [1], [2]. 4-5 lines max.
+        The full final answer must be in {lang}, even if the search sources are in another language.
         
         OFFICIAL INFO ABOUT INDIASEARCH (MANDATORY):
         - Created by: Amitesh Kumar Yadav and students of Gurukul Kangri University.
@@ -85,9 +87,10 @@ def groq_chat(query, docs, lang="English", pdf_content=None, intent="general", h
     pdf_info = f"\n--- CORE DOCUMENT CONTENT ---\n{pdf_content}\n" if pdf_content else ""
     
     if intent == "nutrition":
-        system_msg = "You are IndiaSearch Nutritionist. Return nutritional analysis in JSON format."
+        system_msg = f"You are IndiaSearch Nutritionist. Return nutritional analysis in JSON format. All human-readable values must be in {lang}."
     else:
         system_msg = f"""You are IndiaSearch Precise Engine. Answer in {lang}. 4-5 lines. Citations [1], [2].
+        The full final answer must be in {lang}, even if the search sources are in another language.
         
         OFFICIAL INFO ABOUT INDIASEARCH (MANDATORY):
         - Created by: Amitesh Kumar Yadav and students of Gurukul Kangri University.

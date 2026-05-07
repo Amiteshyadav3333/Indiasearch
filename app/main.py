@@ -145,7 +145,7 @@ def public_user(user: dict):
 
 # --- SEARCH ROUTE (The Brain) ---
 @app.get("/search")
-async def search(q: str, page: int = 1, filter: str = "all", ai_mode: bool = False, advanced_mode: bool = False, session_token: str | None = None, age_verified: str = "false", history: str | None = None):
+async def search(q: str, page: int = 1, filter: str = "all", lang: str = "en", output_lang: str | None = None, ai_mode: bool = False, advanced_mode: bool = False, session_token: str | None = None, age_verified: str = "false", history: str | None = None):
     """
     Intelligent Search Brain Entry Point.
     Orchestrates Multi-level search (Cache -> Local/Free Web -> Paid Fallback).
@@ -174,7 +174,7 @@ async def search(q: str, page: int = 1, filter: str = "all", ai_mode: bool = Fal
             query=q, 
             page=page, 
             filter=filter,
-            lang="en", 
+            lang=output_lang or lang or "en", 
             force_ai=force_ai,
             pdf_content=pdf_content,
             age_verified=(age_verified == "true"),

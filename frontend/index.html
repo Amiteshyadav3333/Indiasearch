@@ -360,6 +360,13 @@
       </div>
       <p id="liveScanStatus">Align QR code or Food Item within the frame</p>
       <div class="scanner-footer">
+        <button onclick="captureLiveNutritionFrame()" id="nutritionCaptureBtn" class="scanner-gallery-btn" style="display:none;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 8v8M8 12h8" />
+          </svg>
+          Analyze Food
+        </button>
         <button onclick="openImagePicker(); stopLiveScan();" class="scanner-gallery-btn">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <rect x="3" y="3" width="18" height="18" rx="2" />
@@ -399,6 +406,33 @@
       </svg>
     </span>
   </button>
+
+  <!-- ═══ FIRST VISIT LANGUAGE MODAL ═══ -->
+  <div id="languageModal" class="overlay-modal language-modal" style="display:none;">
+    <div class="language-card">
+      <div class="language-card-header">
+        <div class="language-brand">
+          <span class="brand-india">India</span><span class="brand-search">Search</span><span class="brand-dot">.</span>
+        </div>
+        <h2 data-i18n="languageTitle">Choose your language</h2>
+        <p data-i18n="languageSubtitle">IndiaSearch will open in your selected language.</p>
+      </div>
+      <div class="language-grid" id="languageGrid">
+        <button class="language-choice" data-lang="en">English</button>
+        <button class="language-choice" data-lang="hi">हिंदी</button>
+        <button class="language-choice" data-lang="bn">বাংলা</button>
+        <button class="language-choice" data-lang="mr">मराठी</button>
+        <button class="language-choice" data-lang="gu">ગુજરાતી</button>
+        <button class="language-choice" data-lang="ta">தமிழ்</button>
+        <button class="language-choice" data-lang="te">తెలుగు</button>
+        <button class="language-choice" data-lang="kn">ಕನ್ನಡ</button>
+        <button class="language-choice" data-lang="ml">മലയാളം</button>
+        <button class="language-choice" data-lang="pa">ਪੰਜਾਬੀ</button>
+        <button class="language-choice" data-lang="ur">اردو</button>
+        <button class="language-choice" data-lang="or">ଓଡ଼ିଆ</button>
+      </div>
+    </div>
+  </div>
 
   <!-- ═══ IMAGE MODAL ═══ -->
   <div id="imageModal" class="overlay-modal" style="display:none;" onclick="if(event.target===this)closeImageModal()">
@@ -471,7 +505,7 @@
     </div>
   </div>
 
-  <script src="app.js?v=smart-filters-4"></script>
+  <script src="app.js?v=language-onboarding-1"></script>
 </body>
 
 </html>

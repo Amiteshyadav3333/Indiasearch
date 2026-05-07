@@ -190,6 +190,15 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
     Master Orchestrator implementing the user's requested architecture.
     """
     start_time = time.time()
+    language_names = {
+        "en": "English", "hi": "Hindi", "as": "Assamese", "bn": "Bengali",
+        "brx": "Bodo", "doi": "Dogri", "gu": "Gujarati", "kn": "Kannada",
+        "ks": "Kashmiri", "gom": "Konkani", "mai": "Maithili", "ml": "Malayalam",
+        "mni": "Manipuri", "mr": "Marathi", "ne": "Nepali", "or": "Odia",
+        "pa": "Punjabi", "sa": "Sanskrit", "sat": "Santali", "sd": "Sindhi",
+        "ta": "Tamil", "te": "Telugu", "ur": "Urdu", "bho": "Bhojpuri"
+    }
+    output_language = language_names.get(lang, lang or "English")
     
     # ── Step 0: Translate if needed ────────────────────────
     en_query, detected_lang = translator.translate_query_to_english(query)
@@ -232,12 +241,12 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
     elif intent == "irctc" or filter == "irctc":
         en_query = f"{en_query} (site:irctc.co.in OR site:indianrail.gov.in)"
     
-    logger.info(f"[Brain] Query: {query!r} | Intent: {intent} | Lang: {detected_lang}")
+    logger.info(f"[Brain] Query: {query!r} | Intent: {intent} | Detected Lang: {detected_lang} | Output Lang: {output_language}")
 
     # ── Step 2: Normalize query + Cache Check ──────────────
     # Normalize: "Weather in Delhi" == "delhi weather" → same cache key
     normalized = normalize_query(en_query)
-    cache_key = CacheManager.make_key("brain:search:v6", detected_lang, normalized, page, intent, filter)
+    cache_key = CacheManager.make_key("brain:search:v6", detected_lang, output_language, normalized, page, intent, filter)
     
     # Record this query for hot cache warming
     hot_query_store.record_query(normalized)
@@ -374,7 +383,7 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
             query=query, 
             docs=final_ranked, 
             ai_mode=True, 
-            lang=("Hindi" if detected_lang == "hi" else "English"),
+            lang=output_language,
             pdf_content=pdf_content,
             intent=intent,
             history=history

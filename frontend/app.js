@@ -135,10 +135,109 @@ let authState = {
   guestId: localStorage.getItem("guestSession") || `guest_${Math.random().toString(36).substr(2, 9)}`
 };
 
-let activeQuery = ""; // Persistent query for pagination after input is cleared
+let activeQuery = ""; // Persistent query for pagination and filter switches
+let restoringBrowserState = false;
 
 if (!localStorage.getItem("guestSession")) {
   localStorage.setItem("guestSession", authState.guestId);
+}
+
+const LANGUAGE_STORAGE_KEY = "indiasearchLanguage";
+const LANGUAGE_NAMES = {
+  en: "English",
+  hi: "Hindi",
+  as: "Assamese",
+  bn: "Bengali",
+  brx: "Bodo",
+  doi: "Dogri",
+  gu: "Gujarati",
+  kn: "Kannada",
+  ks: "Kashmiri",
+  gom: "Konkani",
+  mai: "Maithili",
+  ml: "Malayalam",
+  mni: "Manipuri",
+  mr: "Marathi",
+  ne: "Nepali",
+  or: "Odia",
+  pa: "Punjabi",
+  sa: "Sanskrit",
+  sat: "Santali",
+  sd: "Sindhi",
+  ta: "Tamil",
+  te: "Telugu",
+  ur: "Urdu",
+  bho: "Bhojpuri"
+};
+const UI_TRANSLATIONS = {
+  en: {
+    title: "IndiaSearch - AI Voice Search Engine",
+    placeholder: "Search anything...",
+    aiPlaceholder: "Ask anything on your mind... (AI Mode)",
+    languageTitle: "Choose your language",
+    languageSubtitle: "IndiaSearch will open in your selected language.",
+    trending: "Trending in India",
+    askAi: "Ask AI",
+    visitWebsite: "Visit Website",
+    noResults: "No results found",
+    filters: { advanced: "Advanced", nutrition: "Nutrition", all: "All", news: "News", images: "Images", videos: "Videos", weather: "Weather", score: "Live Score", stock: "Stock", sarkari: "Sarkari", jobs: "Jobs", mandi: "Mandi", irctc: "IRCTC", aadhaar: "Aadhaar/PAN", jugaad: "Jugaad", courts: "Courts" }
+  },
+  hi: {
+    title: "IndiaSearch - AI वॉइस सर्च इंजन",
+    placeholder: "कुछ भी सर्च करें...",
+    aiPlaceholder: "जो मन में है पूछें... (AI मोड)",
+    languageTitle: "अपनी भाषा चुनें",
+    languageSubtitle: "IndiaSearch आपकी चुनी हुई भाषा में खुलेगा।",
+    trending: "भारत में ट्रेंडिंग",
+    askAi: "AI से पूछें",
+    visitWebsite: "वेबसाइट खोलें",
+    noResults: "कोई परिणाम नहीं मिला",
+    filters: { advanced: "एडवांस्ड", nutrition: "न्यूट्रिशन", all: "सब", news: "समाचार", images: "इमेज", videos: "वीडियो", weather: "मौसम", score: "लाइव स्कोर", stock: "स्टॉक", sarkari: "सरकारी", jobs: "नौकरियां", mandi: "मंडी", irctc: "IRCTC", aadhaar: "आधार/PAN", jugaad: "जुगाड़", courts: "कोर्ट्स" }
+  }
+};
+let currentLanguage = localStorage.getItem(LANGUAGE_STORAGE_KEY) || "en";
+
+function getSearchStateFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const query = (params.get("q") || "").trim();
+  const page = Math.max(1, parseInt(params.get("page") || "1", 10) || 1);
+  const filter = params.get("filter") || params.get("type") || "all";
+  const aiMode = params.get("ai") === "1" || params.get("ai_mode") === "true";
+  return { query, page, filter, aiMode };
+}
+
+function applyFilterActiveState(type = "all") {
+  document.querySelectorAll(".filter-pill").forEach(b => b.classList.remove("active"));
+  const btn = document.querySelector(`.filter-pill[data-filter="${type}"]`);
+  if (btn) btn.classList.add("active");
+}
+
+function writeBrowserSearchState({ query, page = 1, filter = "all", aiMode = false }, replace = false) {
+  if (restoringBrowserState) return;
+  const url = new URL(window.location.href);
+  url.search = "";
+
+  if (query) {
+    url.searchParams.set("q", query);
+    url.searchParams.set("filter", filter || "all");
+    if (page > 1) url.searchParams.set("page", String(page));
+    if (aiMode) url.searchParams.set("ai", "1");
+  }
+
+  const state = query
+    ? { view: "search", query, page, filter: filter || "all", aiMode: Boolean(aiMode) }
+    : { view: "home" };
+
+  const currentState = history.state || {};
+  const sameState = currentState.view === state.view
+    && currentState.query === state.query
+    && currentState.page === state.page
+    && currentState.filter === state.filter
+    && currentState.aiMode === state.aiMode;
+  const sameUrl = `${window.location.pathname}${window.location.search}` === `${url.pathname}${url.search}`;
+
+  if (sameState && sameUrl) return;
+  history[replace ? "replaceState" : "pushState"](state, "", url);
 }
 
 // ── Auth Logic ──
@@ -431,9 +530,7 @@ function setFilter(type) {
       advancedMode = false;
   }
 
-  document.querySelectorAll(".filter-pill").forEach(b => b.classList.remove("active"));
-  const btn = document.querySelector(`.filter-pill[data-filter="${type}"]`);
-  if (btn) btn.classList.add("active");
+  applyFilterActiveState(type);
 
   const defaultQueries = {
     news: "latest india news",
@@ -449,12 +546,11 @@ function setFilter(type) {
     courts: "high court supreme court case status",
     nutrition: "calories and nutrition calculator"
   };
-  if (searchInput && !searchInput.value.trim() && defaultQueries[type]) {
-    searchInput.value = defaultQueries[type];
+  if (searchInput && !searchInput.value.trim()) {
+    searchInput.value = activeQuery || defaultQueries[type] || "";
   }
 
   if (type === "nutrition") {
-    startLiveScan();
     return;
   }
 
@@ -474,8 +570,87 @@ async function translateText(text, targetLang) {
   } catch { return text; }
 }
 
+function getUiCopy(lang = currentLanguage) {
+  return UI_TRANSLATIONS[lang] || UI_TRANSLATIONS.en;
+}
+
+async function uiText(key, fallback) {
+  const localCopy = getUiCopy();
+  if (localCopy[key]) return localCopy[key];
+  return translateText(fallback, currentLanguage);
+}
+
+function setElementTextKeepingIcon(element, text) {
+  if (!element) return;
+  [...element.childNodes].forEach(node => {
+    if (node.nodeType === Node.TEXT_NODE) node.remove();
+  });
+  element.appendChild(document.createTextNode(` ${text}`));
+}
+
+function setFilterLabel(filter, label) {
+  document.querySelectorAll(`.filter-pill[data-filter="${filter}"]`).forEach(button => {
+    setElementTextKeepingIcon(button, label);
+  });
+}
+
+async function applySelectedLanguage(lang = currentLanguage) {
+  currentLanguage = lang || "en";
+  localStorage.setItem(LANGUAGE_STORAGE_KEY, currentLanguage);
+  if (languageSelect) languageSelect.value = currentLanguage;
+
+  document.documentElement.lang = currentLanguage;
+  document.documentElement.dir = currentLanguage === "ur" ? "rtl" : "ltr";
+
+  const copy = getUiCopy(currentLanguage);
+  document.title = copy.title || await translateText(UI_TRANSLATIONS.en.title, currentLanguage);
+
+  if (searchInput) searchInput.placeholder = copy.placeholder || await translateText(UI_TRANSLATIONS.en.placeholder, currentLanguage);
+  if (aiSearchInput) aiSearchInput.placeholder = copy.aiPlaceholder || await translateText(UI_TRANSLATIONS.en.aiPlaceholder, currentLanguage);
+  if (languageSelect) languageSelect.title = await uiText("languageTitle", UI_TRANSLATIONS.en.languageTitle);
+
+  document.querySelectorAll("[data-i18n]").forEach(async (el) => {
+    const key = el.getAttribute("data-i18n");
+    el.textContent = await uiText(key, UI_TRANSLATIONS.en[key] || el.textContent);
+  });
+
+  const filterLabels = copy.filters || {};
+  for (const [filter, englishLabel] of Object.entries(UI_TRANSLATIONS.en.filters)) {
+    const translatedLabel = filterLabels[filter] || await translateText(englishLabel, currentLanguage);
+    setFilterLabel(filter, translatedLabel);
+  }
+
+  document.querySelectorAll(".btn-ai-toggle, .filter-pill.ai-tab").forEach(btn => {
+    setElementTextKeepingIcon(btn, copy.askAi || UI_TRANSLATIONS.en.askAi);
+  });
+
+  const sectionLabel = document.querySelector(".section-label");
+  if (sectionLabel && sectionLabel.closest("#trendingContainer")) {
+    setElementTextKeepingIcon(sectionLabel, copy.trending || await translateText(UI_TRANSLATIONS.en.trending, currentLanguage));
+  }
+}
+
+function showLanguageModalIfNeeded() {
+  const modal = document.getElementById("languageModal");
+  if (!modal || localStorage.getItem(LANGUAGE_STORAGE_KEY)) return;
+  modal.style.display = "flex";
+}
+
+function closeLanguageModal() {
+  const modal = document.getElementById("languageModal");
+  if (modal) modal.style.display = "none";
+}
+
+document.addEventListener("click", async (event) => {
+  const choice = event.target.closest(".language-choice[data-lang]");
+  if (!choice) return;
+  await applySelectedLanguage(choice.getAttribute("data-lang"));
+  closeLanguageModal();
+});
+
 languageSelect.addEventListener("change", async () => {
-  searchInput.placeholder = await translateText("Kuch bhi search karo…", languageSelect.value);
+  await applySelectedLanguage(languageSelect.value);
+  if (activeQuery) search(1, false, { replaceHistory: true });
 });
 
 // ═══════════════════════════════════════════
@@ -535,19 +710,26 @@ function toggleVoiceSearch() {
 // ── Camera ──
 let scannerStream = null;
 let scannerActive = false;
+let nutritionScanInProgress = false;
 
 async function startLiveScan() {
   const liveScanner = document.getElementById("liveScanner");
   const video = document.getElementById("scannerVideo");
   const status = document.getElementById("liveScanStatus");
+  const nutritionCaptureBtn = document.getElementById("nutritionCaptureBtn");
 
   try {
+    if (scannerStream) stopLiveScan();
     scannerStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
     video.srcObject = scannerStream;
     liveScanner.style.display = "block";
     scannerActive = true;
+    nutritionScanInProgress = false;
+    if (nutritionCaptureBtn) nutritionCaptureBtn.style.display = currentFilter === "nutrition" ? "inline-flex" : "none";
     requestAnimationFrame(tick);
-    status.innerHTML = "🔍 Looking for QR Code...";
+    status.innerHTML = currentFilter === "nutrition"
+      ? "Frame the food item, then tap Analyze Food."
+      : "🔍 Looking for QR Code...";
   } catch (err) {
     alert("Camera Error: " + err.message);
   }
@@ -559,6 +741,9 @@ function stopLiveScan() {
     scannerStream = null;
   }
   scannerActive = false;
+  nutritionScanInProgress = false;
+  const nutritionCaptureBtn = document.getElementById("nutritionCaptureBtn");
+  if (nutritionCaptureBtn) nutritionCaptureBtn.style.display = "none";
   document.getElementById("liveScanner").style.display = "none";
 }
 
@@ -569,6 +754,11 @@ function tick() {
   const status = document.getElementById("liveScanStatus");
 
   if (video.readyState === video.HAVE_ENOUGH_DATA) {
+    if (currentFilter === "nutrition") {
+      requestAnimationFrame(tick);
+      return;
+    }
+
     const canvas = document.createElement("canvas");
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
@@ -592,6 +782,53 @@ function tick() {
     }
   }
   requestAnimationFrame(tick);
+}
+
+async function captureLiveNutritionFrame() {
+  if (!scannerActive || nutritionScanInProgress) return;
+
+  const video = document.getElementById("scannerVideo");
+  const status = document.getElementById("liveScanStatus");
+  const nutritionCaptureBtn = document.getElementById("nutritionCaptureBtn");
+
+  if (!video || video.readyState < video.HAVE_CURRENT_DATA || !video.videoWidth || !video.videoHeight) {
+    if (status) status.textContent = "Camera is still getting ready. Try again in a moment.";
+    return;
+  }
+
+  nutritionScanInProgress = true;
+  if (nutritionCaptureBtn) nutritionCaptureBtn.disabled = true;
+  if (status) status.innerHTML = `<div class="dna-spinner"></div> Analyzing food nutrition...`;
+
+  try {
+    const maxWidth = 800;
+    const ratio = Math.min(maxWidth / video.videoWidth, 1);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(video.videoWidth * ratio);
+    canvas.height = Math.round(video.videoHeight * ratio);
+    canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+    const b64 = canvas.toDataURL("image/jpeg", 0.8).split(",")[1];
+
+    const data = await analyzeNutritionByImage(b64, "image/jpeg");
+    if (!data.name && !data.food_name) {
+      throw new Error(data.detail || data.error || "Food nutrition result nahi mila");
+    }
+
+    stopLiveScan();
+    if (scanStatus) scanStatus.innerHTML = `✨ <b>Food Identified:</b> ${data.name || data.food_name}`;
+    if (searchInput) searchInput.value = data.name || data.food_name;
+    if (resultsBox) resultsBox.innerHTML = "";
+    if (aiSummaryBox) aiSummaryBox.innerHTML = renderNutritionPanel(data);
+    if (searchFiltersDiv) searchFiltersDiv.style.display = "flex";
+    if (trendingContainer) trendingContainer.style.display = "none";
+    if (historyBox) historyBox.style.display = "none";
+    if (heroSection) heroSection.classList.add("hidden");
+  } catch (e) {
+    nutritionScanInProgress = false;
+    if (nutritionCaptureBtn) nutritionCaptureBtn.disabled = false;
+    if (status) status.textContent = `Nutrition scan failed: ${e.message}`;
+    if (scanStatus) scanStatus.textContent = `❌ Recognition Error: ${e.message}`;
+  }
 }
 
 function openImagePicker() { if (cameraInput) cameraInput.click(); }
@@ -659,10 +896,11 @@ async function triggerVisualSearch(file) {
     if (currentFilter === "nutrition") {
         if (scanStatus) scanStatus.innerHTML = `<div class="dna-spinner"></div> 🧬 Gemini 1.5 Flash: Scanning for Nutritional DNA...`;
         const b64 = await compressImage(file);
-        const data = await analyzeNutritionByImage(b64);
-        if (data.name) {
-            if (scanStatus) scanStatus.innerHTML = `✨ <b>Food Identified:</b> ${data.name}`;
-            searchInput.value = data.name;
+        const data = await analyzeNutritionByImage(b64, "image/jpeg");
+        if (data.name || data.food_name) {
+            const foodName = data.name || data.food_name;
+            if (scanStatus) scanStatus.innerHTML = `✨ <b>Food Identified:</b> ${foodName}`;
+            searchInput.value = foodName;
             resultsBox.innerHTML = "";
             aiSummaryBox.innerHTML = renderNutritionPanel(data);
             
@@ -786,8 +1024,12 @@ if (pdfInput) {
 // ═══════════════════════════════════════════
 // HOME RESET & CLEANUP
 // ═══════════════════════════════════════════
-async function resetToHome() {
+async function resetToHome(options = {}) {
+  const { replaceHistory = false, skipHistory = false } = options;
   chatHistory = [];
+  activeQuery = "";
+  currentFilter = "all";
+  advancedMode = false;
   searchInput.value = "";
   resultsBox.innerHTML = "";
   aiSummaryBox.innerHTML = "";
@@ -806,7 +1048,10 @@ async function resetToHome() {
       aiPdfPreview.innerHTML = "";
   }
   
+  applyFilterActiveState("all");
+  document.documentElement.setAttribute("data-ai-mode", "false");
   closeAutocomplete();
+  if (!skipHistory) writeBrowserSearchState({ query: "" }, replaceHistory);
   
   // Clear backend memory context for this session
   const finalSess = authState.sessionToken || authState.guestId;
@@ -885,21 +1130,23 @@ document.addEventListener("click", (event) => {
 // ═══════════════════════════════════════════
 // MAIN SEARCH
 // ═══════════════════════════════════════════
-async function search(pageNumber = 1, aiMode = false) {
+async function search(pageNumber = 1, aiMode = false, options = {}) {
+  const { replaceHistory = false, skipHistory = false } = options;
   let query = searchInput ? searchInput.value.trim() : "";
   
-  // If no query in input, but we're on a non-first page, use activeQuery
-  if (!query && pageNumber > 1) {
+  // If no query in input, keep the current query for pagination/filter changes.
+  if (!query && activeQuery) {
     query = activeQuery;
+    if (searchInput) searchInput.value = query;
   }
 
   if (!query) {
-    resetToHome();
+    resetToHome({ replaceHistory, skipHistory });
     return;
   }
 
   // Update activeQuery on new search
-  if (pageNumber === 1) activeQuery = query;
+  activeQuery = query;
 
   closeAutocomplete();
 
@@ -909,8 +1156,12 @@ async function search(pageNumber = 1, aiMode = false) {
   if (trendingContainer) trendingContainer.style.display = "none";
   if (historyBox) historyBox.style.display = "none";
   if (pageNumber === 1) saveHistory(query);
+  applyFilterActiveState(currentFilter);
+  if (!skipHistory) {
+    writeBrowserSearchState({ query, page: pageNumber, filter: currentFilter, aiMode }, replaceHistory);
+  }
 
-  const targetLang = languageSelect.value;
+  const targetLang = currentLanguage || languageSelect.value || "en";
 
   // Skeleton loader
   resultsBox.innerHTML = `
@@ -929,7 +1180,7 @@ async function search(pageNumber = 1, aiMode = false) {
     if (currentFilter === "nutrition" && pageNumber === 1) {
       if (aiSummaryBox) aiSummaryBox.innerHTML = `<div class="loading-ai">⏳ Claude is analyzing ${query}...</div>`;
       const data = await analyzeNutritionByText(query);
-      if (data.name) {
+      if (data.name || data.food_name) {
           resultsBox.innerHTML = "";
           aiSummaryBox.innerHTML = renderNutritionPanel(data);
           return;
@@ -941,6 +1192,8 @@ async function search(pageNumber = 1, aiMode = false) {
         q: query, 
         page: String(pageNumber), 
         filter: currentFilter, 
+        lang: targetLang,
+        output_lang: LANGUAGE_NAMES[targetLang] || "English",
         ai_mode: String(aiMode),
         advanced_mode: String(advancedMode),
         history: aiMode ? JSON.stringify(chatHistory) : ""
@@ -1118,7 +1371,7 @@ async function search(pageNumber = 1, aiMode = false) {
     const hasSmartAnswer = Boolean(data.special_data || data.weather || data.summary || data.knowledge_panel || data.sports || data.stocks);
 
     if (!hasResults && !hasSmartAnswer) {
-      const noRes = await translateText("No results found", targetLang);
+      const noRes = getUiCopy(targetLang).noResults || await translateText("No results found", targetLang);
       resultsBox.innerHTML = `<div class="state-empty"><span class="state-empty-icon">🔍</span>${noRes}</div>`;
       if (paginationContainer) paginationContainer.innerHTML = "";
       return;
@@ -1154,7 +1407,7 @@ async function search(pageNumber = 1, aiMode = false) {
       const [tt, ts, visitT] = await Promise.all([
         translateText(item.title, targetLang),
         translateText(item.snippet || "", targetLang),
-        translateText("Visit Website", targetLang)
+        Promise.resolve(getUiCopy(targetLang).visitWebsite || "Visit Website")
       ]);
 
       // News detection: either filter is news OR item has is_news flag
@@ -1312,9 +1565,8 @@ async function search(pageNumber = 1, aiMode = false) {
 
     window.scrollTo({ top: 0, behavior: "smooth" });
 
-    // ── Clear Search Boxes as per User Request ──
-    // "Answer aaye remove ho jay"
-    if (searchInput) searchInput.value = "";
+    // Keep searched query visible so users can switch tabs from the same bar.
+    if (searchInput) searchInput.value = query;
     if (aiSearchInput) {
         aiSearchInput.value = "";
         aiSearchInput.style.height = "auto";
@@ -1386,6 +1638,26 @@ document.addEventListener("click", e => { if (searchBox && !searchBox.contains(e
 searchInput.addEventListener("keyup", e => {
   if (e.key === "Enter") { closeAutocomplete(); search(1, false); }
   else if (!searchInput.value.trim()) resetToHome();
+});
+
+window.addEventListener("popstate", async (event) => {
+  restoringBrowserState = true;
+  try {
+    const urlState = getSearchStateFromUrl();
+    const state = event.state || (urlState.query ? { view: "search", ...urlState } : { view: "home" });
+
+    if (state.view === "search" && state.query) {
+      currentFilter = state.filter || "all";
+      advancedMode = false;
+      if (searchInput) searchInput.value = state.query;
+      applyFilterActiveState(currentFilter);
+      await search(state.page || 1, Boolean(state.aiMode), { skipHistory: true });
+    } else {
+      await resetToHome({ skipHistory: true });
+    }
+  } finally {
+    restoringBrowserState = false;
+  }
 });
 
 // ═══════════════════════════════════════════
@@ -1970,12 +2242,30 @@ fetchWithApiFallback = async function(path, options = {}) {
   return originalFetchWithApiFallback(path, options);
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
+  const hasSavedLanguage = Boolean(localStorage.getItem(LANGUAGE_STORAGE_KEY));
   renderHistory();
   renderTrending();
   renderAuthState();
   hydrateSession();
   initHomeWidgets();
+  await applySelectedLanguage(currentLanguage);
+  if (!hasSavedLanguage) {
+    const modal = document.getElementById("languageModal");
+    if (modal) modal.style.display = "flex";
+  }
+
+  const initialState = getSearchStateFromUrl();
+  if (initialState.query) {
+    currentFilter = initialState.filter || "all";
+    activeQuery = initialState.query;
+    if (searchInput) searchInput.value = initialState.query;
+    applyFilterActiveState(currentFilter);
+    writeBrowserSearchState(initialState, true);
+    search(initialState.page, initialState.aiMode, { skipHistory: true });
+  } else {
+    writeBrowserSearchState({ query: "" }, true);
+  }
 });
 // Final Initialization
 updateUserUI();
@@ -1990,21 +2280,25 @@ function showCaloryScanner() {
 }
 
 async function analyzeNutritionByText(query) {
-  const res = await fetch('/api/nutrition/text', {
+  const res = await fetchWithApiFallback('/api/nutrition/text', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ query })
   });
-  return await res.json();
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || data.error || "Nutrition analysis failed");
+  return data;
 }
 
 async function analyzeNutritionByImage(base64, mediaType = 'image/jpeg') {
-  const res = await fetch('/api/nutrition/image', {
+  const res = await fetchWithApiFallback('/api/nutrition/image', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ image_base64: base64, media_type: mediaType })
   });
-  return await res.json();
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || data.error || "Nutrition image analysis failed");
+  return data;
 }
 
 function compressImage(file, maxWidth = 800) {
