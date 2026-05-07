@@ -72,6 +72,61 @@ def build_ai_sources(results: list, limit: int = 8) -> list:
 
     return sources
 
+def normalize_media_result(item: dict, media_type: str) -> dict:
+    normalized = dict(item or {})
+    if media_type == "image":
+        image_url = normalized.get("image") or normalized.get("url") or normalized.get("thumbnail") or ""
+        normalized["url"] = image_url
+        normalized["image"] = image_url
+        normalized.setdefault("title", "Image Result")
+        normalized.setdefault("snippet", normalized.get("source_url") or normalized.get("source") or "Image")
+    elif media_type == "video":
+        url = normalized.get("url") or normalized.get("content") or normalized.get("href") or ""
+        image_url = normalized.get("image") or normalized.get("thumbnail") or ""
+        if not image_url:
+            yt_id = extract_youtube_id(url)
+            if yt_id:
+                image_url = f"https://i.ytimg.com/vi/{yt_id}/hqdefault.jpg"
+        normalized["url"] = url
+        normalized["image"] = image_url
+        normalized.setdefault("title", "Video Result")
+        normalized.setdefault("snippet", normalized.get("publisher") or normalized.get("duration") or "Video")
+    return normalized
+
+def extract_youtube_id(url: str) -> str:
+    if not url:
+        return ""
+    patterns = [
+        r"(?:youtube\.com/watch\?v=|youtu\.be/)([A-Za-z0-9_-]{6,})",
+        r"youtube\.com/embed/([A-Za-z0-9_-]{6,})",
+        r"youtube\.com/shorts/([A-Za-z0-9_-]{6,})",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
+    return ""
+
+async def resilient_web_results(query: str, max_results: int = MAX_WEB_RESULTS) -> list:
+    tasks = [
+        asyncio.create_task(duckduckgo_client.search(query, max_results=max_results)),
+        asyncio.create_task(yahoo_client.search(query, max_results=max_results)),
+        asyncio.create_task(google_client.search(query, max_results=max_results)),
+        asyncio.create_task(api_client.search(query, max_results=max_results)),
+    ]
+    done, pending = await asyncio.wait(tasks, timeout=PARALLEL_TIMEOUT + 2)
+    collections = []
+    for task in pending:
+        task.cancel()
+    for task in done:
+        try:
+            result = await task
+            if result:
+                collections.append(result)
+        except Exception as e:
+            logger.error(f"[Brain] Resilient web fallback error: {e}")
+    return merge_service.merge_and_deduplicate(collections)
+
 async def identify_intent(query: str) -> str:
     """
     The 'Brain' element: Understands what the user is asking.
@@ -246,7 +301,7 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
     # ── Step 2: Normalize query + Cache Check ──────────────
     # Normalize: "Weather in Delhi" == "delhi weather" → same cache key
     normalized = normalize_query(en_query)
-    cache_key = CacheManager.make_key("brain:search:v6", detected_lang, output_language, normalized, page, intent, filter)
+    cache_key = CacheManager.make_key("brain:search:v7", detected_lang, output_language, normalized, page, intent, filter, "advanced" if advanced_mode else "standard")
     
     # Record this query for hot cache warming
     hot_query_store.record_query(normalized)
@@ -276,21 +331,22 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
     # ── Level 2: Parallel Search (Local + Web) ────────────
     tasks = []
     
-    dedicated_api_filter = filter in ["news", "weather", "score", "stock", "finance"]
+    dedicated_api_filter = filter in ["weather", "score", "stock", "finance"]
 
     if filter == "news":
-        logger.info("[Brain] Dedicated News filter active. Using news API only.")
+        logger.info("[Brain] News filter active. Using news API plus web fallback.")
         tasks.append(asyncio.create_task(news_service.fetch_news(en_query)))
     elif dedicated_api_filter:
         logger.info(f"[Brain] Dedicated API filter active: {filter}. Skipping generic web search.")
     elif filter == "images":
-        # EXCLUSIVE IMAGE SEARCH: Serper API
+        # Multi-source image search so the tab still works if a paid API/key is unavailable.
         tasks.append(asyncio.create_task(api_client.search_images(en_query, max_results=MAX_WEB_RESULTS)))
-        # Do not run AI summary or Text indexing for Images
+        tasks.append(asyncio.create_task(duckduckgo_client.search_images(en_query, max_results=MAX_WEB_RESULTS)))
+        tasks.append(asyncio.create_task(yahoo_client.search_images(en_query, max_results=MAX_WEB_RESULTS)))
     elif filter == "videos":
-        # EXCLUSIVE VIDEO SEARCH: Serper API
+        # Multi-source video search with thumbnail normalization.
         tasks.append(asyncio.create_task(api_client.search_videos(en_query, max_results=MAX_WEB_RESULTS)))
-        # Do not run AI summary or Text indexing for Videos
+        tasks.append(asyncio.create_task(duckduckgo_client.search_videos(en_query, max_results=MAX_WEB_RESULTS)))
     else:
         # 1. Local Elasticsearch
         tasks.append(asyncio.create_task(ElasticClient.search_async(en_query, max_results=MAX_WEB_RESULTS)))
@@ -338,6 +394,10 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
 
     # ── Level 3: Merge & Deduplicate ──────────────────────
     merged_results = merge_service.merge_and_deduplicate(search_collections)
+    if filter == "images":
+        merged_results = [normalize_media_result(r, "image") for r in merged_results]
+    elif filter == "videos":
+        merged_results = [normalize_media_result(r, "video") for r in merged_results]
     filtered_results = merge_service.filter_results(merged_results)
     
     # Track sources from merged
@@ -367,6 +427,24 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
         if local_quality_ok:
             logger.info(f"[Brain] ✅ Local results sufficient ({len(filtered_results)}). Skipping paid API.")
 
+    if filter == "news" and len(filtered_results) < MIN_QUALITY_RESULTS:
+        fallback_news = await resilient_web_results(f"{en_query} latest news India", MAX_WEB_RESULTS)
+        if fallback_news:
+            filtered_results = merge_service.merge_and_deduplicate([filtered_results, fallback_news])
+            for r in filtered_results:
+                r["is_news"] = True
+
+    if dedicated_api_filter and len(filtered_results) < 3:
+        fallback_query = {
+            "weather": f"{en_query} weather forecast",
+            "score": f"{en_query} live cricket score",
+            "stock": f"{en_query} stock price market",
+            "finance": f"{en_query} stock price market",
+        }.get(filter, en_query)
+        fallback_results = await resilient_web_results(fallback_query, MAX_WEB_RESULTS)
+        if fallback_results:
+            filtered_results = merge_service.merge_and_deduplicate([filtered_results, fallback_results])
+
     # ── Level 5: Rank & Fresh Indexing ────────────────────
     final_ranked = ranking_service.rank(filtered_results, en_query)
     
@@ -385,7 +463,7 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
             ai_mode=True, 
             lang=output_language,
             pdf_content=pdf_content,
-            intent=intent,
+            intent=("advanced" if advanced_mode else intent),
             history=history
         )
 

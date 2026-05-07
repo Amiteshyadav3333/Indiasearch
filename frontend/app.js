@@ -1094,6 +1094,44 @@ function getReadableHost(url, fallback = "Source") {
   }
 }
 
+function mediaFallbackImage(title = "IndiaSearch", type = "Preview") {
+  const safeTitle = escapeHtml(String(title).slice(0, 42));
+  const accent = type === "Video" ? "#ef4444" : "#1a73e8";
+  const bg = type === "Video" ? "#111827" : "#eef4ff";
+  const text = type === "Video" ? "#ffffff" : "#202124";
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540">
+      <rect width="960" height="540" fill="${bg}"/>
+      <rect x="56" y="56" width="848" height="428" rx="28" fill="${accent}" opacity="0.12"/>
+      <circle cx="480" cy="242" r="76" fill="${accent}"/>
+      <path d="M456 202v80l70-40z" fill="#fff"/>
+      <text x="480" y="365" text-anchor="middle" font-family="Arial, sans-serif" font-size="34" font-weight="700" fill="${text}">${safeTitle}</text>
+      <text x="480" y="414" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" fill="${text}" opacity="0.72">IndiaSearch ${type}</text>
+    </svg>`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+function getYoutubeVideoId(url = "") {
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_-]{6,})/,
+    /youtube\.com\/embed\/([A-Za-z0-9_-]{6,})/,
+    /youtube\.com\/shorts\/([A-Za-z0-9_-]{6,})/
+  ];
+  for (const pattern of patterns) {
+    const match = String(url).match(pattern);
+    if (match) return match[1];
+  }
+  return "";
+}
+
+function getVideoThumbnail(item = {}, title = "") {
+  const provided = item.image || item.thumbnail || item.thumbnailUrl || "";
+  if (provided) return provided;
+  const videoId = getYoutubeVideoId(item.url || "");
+  if (videoId) return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+  return mediaFallbackImage(title || item.title || "Video", "Video");
+}
+
 function renderAiSources(sources = []) {
   // User requested to hide the sources panel/cards. 
   // Citations [1], [2] will still appear inside the markdown answer.
@@ -1423,57 +1461,38 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
       }
 
       if (isVideos) {
-        let videoId = "";
-        if (item.url.includes("youtube.com/watch?v=")) {
-          videoId = item.url.split("v=")[1].split("&")[0];
-        } else if (item.url.includes("youtu.be/")) {
-          videoId = item.url.split("youtu.be/")[1].split("?")[0];
-        }
-
-        if (videoId) {
-          return `
-            <div class="video-card">
-              <div class="video-frame-container" style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 12px; background: #000; margin-bottom: 10px;">
-                <iframe src="https://www.youtube.com/embed/${videoId}" 
-                        style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0;" 
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                        allowfullscreen>
-                </iframe>
+        const thumb = getVideoThumbnail(item, tt);
+        const fallback = mediaFallbackImage(tt, "Video");
+        return `
+          <a class="video-card" href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer" style="cursor: pointer; text-decoration:none;">
+            <div class="video-thumbnail" style="position: relative; border-radius: 12px; overflow: hidden; margin-bottom: 10px; background: #111827; aspect-ratio: 16 / 9;">
+              <img src="${escapeHtml(thumb)}" alt="${tt}" style="width: 100%; height: 100%; object-fit: cover; display:block;" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src='${fallback}'">
+              <div class="play-icon" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.62); border-radius: 50%; width: 54px; height: 54px; display: flex; align-items: center; justify-content: center;">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>
               </div>
-              <div class="video-meta">
-                <a href="${item.url}" target="_blank" class="video-title" style="font-weight: 600; font-size: 16px; color: var(--text-primary); text-decoration: none; display: block; margin-bottom: 4px; line-height: 1.4;">${tt}</a>
-                <div class="video-source" style="font-size: 13px; color: var(--text-secondary);">${ts}</div>
-              </div>
-            </div>`;
-        } else {
-          return `
-            <div class="video-card" onclick="window.open('${item.url}', '_blank')" style="cursor: pointer;">
-              <div class="video-thumbnail" style="position: relative; border-radius: 12px; overflow: hidden; margin-bottom: 10px;">
-                <img src="${item.image || ''}" alt="${tt}" style="width: 100%; height: 200px; object-fit: cover; background: #1a1a1a;" loading="lazy">
-                <div class="play-icon" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.6); border-radius: 50%; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center;">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>
-                </div>
-              </div>
-              <div class="video-meta">
-                <div class="video-title" style="font-weight: 600; font-size: 16px; color: var(--text-primary); display: block; margin-bottom: 4px; line-height: 1.4;">${tt}</div>
-                <div class="video-source" style="font-size: 13px; color: var(--text-secondary);">${ts}</div>
-              </div>
-            </div>`;
-        }
+            </div>
+            <div class="video-meta">
+              <div class="video-title" style="font-weight: 700; font-size: 16px; color: var(--text-primary); display: block; margin-bottom: 4px; line-height: 1.4;">${tt}</div>
+              <div class="video-source" style="font-size: 13px; color: var(--text-secondary);">${ts}</div>
+            </div>
+          </a>`;
       }
 
       if (isImages) {
         const isFallback = (item.snippet || "").includes("Fallback Preview");
+        const imageUrl = item.image || item.url || "";
+        const sourceUrl = item.source_url || item.pageUrl || item.url || "";
+        const fallback = mediaFallbackImage(tt, "Image");
         return `
           <div class="image-card">
-            <div class="image-frame" onclick="openImageModal('${item.url}')">
-              <img src="${item.url}" alt="${tt}" loading="lazy" referrerpolicy="no-referrer">
+            <div class="image-frame" onclick="openImageModal(decodeURIComponent('${encodeURIComponent(imageUrl)}'))">
+              <img src="${escapeHtml(imageUrl)}" alt="${tt}" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src='${fallback}'">
             </div>
             <div class="image-meta">
               ${isFallback ? `<span class="image-badge">Fallback</span>` : ""}
               <div class="image-title">${tt}</div>
               <div class="image-source">${ts}</div>
-              <a href="${item.url}" target="_blank" class="image-open-link">Open →</a>
+              <a href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer" class="image-open-link">Open →</a>
             </div>
           </div>`;
       }

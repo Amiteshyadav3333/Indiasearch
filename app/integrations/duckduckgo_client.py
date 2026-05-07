@@ -61,6 +61,8 @@ def _ddg_sync_images(query: str, max_results: int = 20, region: str = "in-en") -
             results.append({
                 "title":   r.get("title", ""),
                 "url":     r.get("image", ""),
+                "image":   r.get("image", ""),
+                "source_url": r.get("url", ""),
                 "snippet": r.get("source", ""),
                 "source":  "duckduckgo_images",
             })
@@ -73,4 +75,32 @@ async def search_images(query: str, max_results: int = 20, region: str = "in-en"
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(
         _executor, _ddg_sync_images, query, max_results, region
+    )
+
+def _ddg_sync_videos(query: str, max_results: int = 20, region: str = "in-en") -> list:
+    if DDGS is None: return []
+    try:
+        with DDGS() as ddgs:
+            raw = list(ddgs.videos(query, region=region, max_results=max_results))
+        results = []
+        for r in raw:
+            results.append({
+                "title": r.get("title", ""),
+                "url": r.get("content") or r.get("href") or r.get("url") or "",
+                "image": r.get("images", {}).get("large") if isinstance(r.get("images"), dict) else (r.get("thumbnail") or r.get("image", "")),
+                "snippet": r.get("description") or r.get("publisher") or "",
+                "duration": r.get("duration", ""),
+                "publisher": r.get("publisher", ""),
+                "source": "duckduckgo_videos",
+            })
+        logger.info(f"[DDG Videos] Got {len(results)} results for: {query!r}")
+        return results
+    except Exception as e:
+        logger.error(f"[DDG] Video search failed: {e}")
+        return []
+
+async def search_videos(query: str, max_results: int = 20, region: str = "in-en") -> list:
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(
+        _executor, _ddg_sync_videos, query, max_results, region
     )

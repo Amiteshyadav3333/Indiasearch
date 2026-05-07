@@ -182,10 +182,13 @@ def _serper_sync_images(query: str, max_results: int = 20) -> list:
 
         results = []
         for item in data.get("images", [])[:max_results]:
+            image_url = item.get("imageUrl") or item.get("thumbnailUrl") or item.get("url") or ""
             results.append({
                 "title": item.get("title", ""),
-                "url": item.get("imageUrl", ""),
-                "snippet": item.get("source", ""),
+                "url": image_url,
+                "image": image_url,
+                "source_url": item.get("link") or item.get("sourceUrl") or "",
+                "snippet": item.get("source", "") or item.get("link", ""),
                 "source": "serper_images"
             })
         return results
@@ -221,11 +224,14 @@ def _serper_sync_videos(query: str, max_results: int = 20) -> list:
 
         results = []
         for item in data.get("videos", [])[:max_results]:
+            thumb = item.get("imageUrl") or item.get("thumbnailUrl") or item.get("image") or ""
             results.append({
                 "title": item.get("title", ""),
                 "url": item.get("link", ""),
-                "image": item.get("imageUrl", ""),
+                "image": thumb,
                 "snippet": item.get("snippet", ""),
+                "duration": item.get("duration", ""),
+                "publisher": item.get("source", ""),
                 "source": "serper_videos"
             })
         return results
