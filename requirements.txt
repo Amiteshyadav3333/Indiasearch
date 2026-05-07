@@ -1,3 +1,4 @@
+setuptools
 aiohappyeyeballs==2.6.1
 aiohttp==3.13.4
 aiosignal==1.4.0
@@ -29,8 +30,8 @@ google-crc32c==1.8.0
 google-resumable-media==2.8.2
 googleapis-common-protos==1.63.1
 groq==0.18.0
-grpcio==1.62.1
-grpcio-status==1.62.1
+grpcio>=1.66.1
+grpcio-status>=1.66.1
 h11==0.16.0
 h2==4.3.0
 hpack==4.1.0
@@ -50,7 +51,7 @@ openai==2.30.0
 primp==1.2.0
 propcache==0.4.1
 proto-plus==1.23.0
-protobuf==4.25.3
+protobuf>=4.25.3
 psycopg2-binary==2.9.10
 pyasn1==0.6.3
 pyasn1_modules==0.4.2
