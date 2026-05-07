@@ -28,7 +28,7 @@ google-cloud-firestore>=2.21.0
 google-cloud-storage==3.10.1
 google-crc32c==1.8.0
 google-resumable-media==2.8.2
-googleapis-common-protos==1.63.1
+googleapis-common-protos>=1.63.2
 groq==0.18.0
 grpcio>=1.66.1
 grpcio-status>=1.66.1
@@ -50,7 +50,7 @@ nltk==3.9.2
 openai==2.30.0
 primp==1.2.0
 propcache==0.4.1
-proto-plus==1.23.0
+proto-plus>=1.25.0
 protobuf>=4.25.3
 psycopg2-binary==2.9.10
 pyasn1==0.6.3
