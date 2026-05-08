@@ -16,7 +16,8 @@
   <link rel="manifest" href="manifest.json">
 
   <!-- ═══ SEO META TAGS ═══ -->
-  <meta name="description" content="IndiaSearch – India ka apna AI-powered search engine. Search in Hindi, English aur 22+ Indian languages. Voice search, AI answers, live news, weather aur bahut kuch.">
+  <meta name="description"
+    content="IndiaSearch – India ka apna AI-powered search engine. Search in Hindi, English aur 22+ Indian languages. Voice search, AI answers, live news, weather aur bahut kuch.">
   <meta name="keywords" content="IndiaSearch, India search engine, Hindi search, AI search India, voice search India">
   <meta name="author" content="IndiaSearch">
   <meta name="robots" content="index, follow">
@@ -26,7 +27,8 @@
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://indiasearch.site/">
   <meta property="og:title" content="IndiaSearch – India ka AI Search Engine">
-  <meta property="og:description" content="India ka apna AI-powered search engine. 22+ Indian languages mein search karo. Voice, AI, News, Weather sab ek jagah.">
+  <meta property="og:description"
+    content="India ka apna AI-powered search engine. 22+ Indian languages mein search karo. Voice, AI, News, Weather sab ek jagah.">
   <meta property="og:image" content="https://indiasearch.site/favicon-512.png">
   <meta property="og:image:width" content="512">
   <meta property="og:image:height" content="512">
@@ -53,6 +55,40 @@
   <!-- Markdown Parser -->
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  <!-- ═══ FOUNDER & STRUCTURED DATA SCHEMA ═══ -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Person",
+    "name": "Amitesh Kumar Yadav",
+    "url": "https://indiasearch.site",
+    "image": "https://indiasearch.site",
+    "jobTitle": "Founder & Researcher",
+    "description": "Amitesh Kumar Yadav is the Founder of IndiaSearch (AI Voice Search Engine), PodLive (Real-time Podcast Platform), and a leading Researcher of Blockchain-based Electronic Voting Systems.",
+    "worksFor": {
+      "@type": "Organization",
+      "name": "IndiaSearch",
+      "url": "https://indiasearch.site"
+    },
+    "sameAs": [
+      "https://www.linkedin.com/in/amitesh-kumar-yadav-b55b10293",
+      "https://x.com/Amiteshyad7898",
+      "https://indiasearch.site",
+      "https://indiasearch.site"
+    ],
+    "knowsAbout": [
+      "Blockchain Technology",
+      "Artificial Intelligence",
+      "AI Voice Search",
+      "Real-time Podcasting",
+      "Digital India Research"
+    ]
+  }
+  </script>
+
+  <!-- ═══ SEO Metadata for Founder ═══ -->
+  <meta name="author" content="Amitesh Kumar Yadav">
 </head>
 
 <body>
@@ -211,7 +247,8 @@
     <div id="searchFilters" class="filter-bar" style="display:none;">
       <button class="filter-pill" data-filter="advanced" onclick="setFilter('advanced')">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+          <polygon
+            points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
         </svg>
         Advanced
       </button>
@@ -276,13 +313,17 @@
       </button>
       <button class="filter-pill" data-filter="sarkari" onclick="setFilter('sarkari')">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line>
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="16" y1="2" x2="16" y2="6"></line>
+          <line x1="8" y1="2" x2="8" y2="6"></line>
+          <line x1="3" y1="10" x2="21" y2="10"></line>
         </svg>
         Sarkari
       </button>
       <button class="filter-pill" data-filter="jobs" onclick="setFilter('jobs')">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+          <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+          <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
         </svg>
         Jobs
       </button>
@@ -294,31 +335,41 @@
       </button>
       <button class="filter-pill" data-filter="irctc" onclick="setFilter('irctc')">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <rect x="4" y="3" width="16" height="16" rx="2" ry="2"></rect><path d="M4 11h16M12 3v8M8 19l-2 3M16 19l2 3"></path>
+          <rect x="4" y="3" width="16" height="16" rx="2" ry="2"></rect>
+          <path d="M4 11h16M12 3v8M8 19l-2 3M16 19l2 3"></path>
         </svg>
         IRCTC
       </button>
       <button class="filter-pill" data-filter="aadhaar" onclick="setFilter('aadhaar')">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline>
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="16" y1="13" x2="8" y2="13"></line>
+          <line x1="16" y1="17" x2="8" y2="17"></line>
+          <polyline points="10 9 9 9 8 9"></polyline>
         </svg>
         Aadhaar/PAN
       </button>
       <button class="filter-pill" data-filter="jugaad" onclick="setFilter('jugaad')">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
+          <path
+            d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z">
+          </path>
         </svg>
         Jugaad
       </button>
       <button class="filter-pill" data-filter="courts" onclick="setFilter('courts')">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <circle cx="12" cy="8" r="7"></circle><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
+          <circle cx="12" cy="8" r="7"></circle>
+          <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
         </svg>
         Courts
       </button>
       <button class="filter-pill" data-filter="nutrition" onclick="setFilter('nutrition')">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path>
+          <path
+            d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z">
+          </path>
         </svg>
         Nutrition
       </button>
@@ -360,7 +411,8 @@
       </div>
       <p id="liveScanStatus">Align QR code or Food Item within the frame</p>
       <div class="scanner-footer">
-        <button onclick="captureLiveNutritionFrame()" id="nutritionCaptureBtn" class="scanner-gallery-btn" style="display:none;">
+        <button onclick="captureLiveNutritionFrame()" id="nutritionCaptureBtn" class="scanner-gallery-btn"
+          style="display:none;">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <circle cx="12" cy="12" r="10" />
             <path d="M12 8v8M8 12h8" />
