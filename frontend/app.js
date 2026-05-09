@@ -665,6 +665,68 @@ const STT_LOCALES = {
   sat: "en-IN", sd: "ur-IN", ta: "ta-IN", te: "te-IN", ur: "ur-IN", bh: "bh-IN"
 };
 
+// ── Wake Word & Audio Feedback ──
+let wakeRecognition;
+let isWakeEnabled = false;
+
+function playWakeSound() {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // A5 note
+    oscillator.frequency.exponentialRampToValueAtTime(1320, audioCtx.currentTime + 0.1); // E6 note
+
+    gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+    gainNode.gain.linearRampToValueAtTime(0.1, audioCtx.currentTime + 0.05);
+    gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.2);
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+
+    oscillator.start();
+    oscillator.stop(audioCtx.currentTime + 0.2);
+}
+
+function startWakeWordDetection() {
+    if (!("webkitSpeechRecognition" in window) || isWakeEnabled) return;
+    
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    wakeRecognition = new SR();
+    wakeRecognition.continuous = true;
+    wakeRecognition.interimResults = true;
+    wakeRecognition.lang = "en-IN";
+
+    wakeRecognition.onresult = (e) => {
+        for (let i = e.resultIndex; i < e.results.length; ++i) {
+            const transcript = e.results[i][0].transcript.toLowerCase();
+            if (transcript.includes("hey india search") || transcript.includes("okay india search") || transcript.includes("ok india search") || transcript.includes("hello india search")) {
+                console.log("Wake word detected!");
+                isWakeEnabled = false; // Temporarily disable to avoid loop
+                wakeRecognition.stop();
+                playWakeSound();
+                setTimeout(() => toggleVoiceSearch(), 300);
+                break;
+            }
+        }
+    };
+
+    wakeRecognition.onend = () => {
+        if (isWakeEnabled && !isListening) {
+            try { wakeRecognition.start(); } catch(e) {}
+        }
+    };
+
+    try {
+        wakeRecognition.start();
+        isWakeEnabled = true;
+        console.log("Wake word detection active: Say 'Hey IndiaSearch'");
+    } catch(e) {
+        console.error("Wake word start failed:", e);
+    }
+}
+
 if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   recognition = new SR();
@@ -672,6 +734,9 @@ if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
   recognition.interimResults = false;
   recognition.onstart = () => {
     isListening = true;
+    isWakeEnabled = false; 
+    if (wakeRecognition) wakeRecognition.stop(); // Ensure wake word stops when searching
+
     micButton.classList.add("listening");
     if (micButtonAi) micButtonAi.classList.add("listening");
     const target = (searchBoxAi && searchBoxAi.style.display !== "none") ? aiSearchInput : searchInput;
@@ -691,8 +756,13 @@ if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
     isListening = false;
     micButton.classList.remove("listening");
     if (micButtonAi) micButtonAi.classList.remove("listening");
-    if (searchInput) searchInput.placeholder = "Kuch bhi search karo…";
     if (aiSearchInput) aiSearchInput.placeholder = "Puchho jo aapke mann mein hai... (AI Mode)";
+    
+    // Restart wake word after a short delay
+    setTimeout(() => {
+        isWakeEnabled = true;
+        startWakeWordDetection();
+    }, 1000);
   };
   recognition.onerror = () => {
     isListening = false;
@@ -703,10 +773,16 @@ if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
 
 function toggleVoiceSearch() {
   if (!recognition) { alert("Voice search not supported in your browser"); return; }
-  isListening ? recognition.stop() : (() => {
-    recognition.lang = STT_LOCALES[languageSelect.value] || "en-IN";
-    recognition.start();
-  })();
+  if (isListening) {
+      recognition.stop();
+  } else {
+      if (wakeRecognition) {
+          isWakeEnabled = false;
+          wakeRecognition.stop();
+      }
+      recognition.lang = STT_LOCALES[languageSelect.value] || "en-IN";
+      recognition.start();
+  }
 }
 
 // ── Location Services ──
@@ -1257,6 +1333,18 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
   if (searchFiltersDiv) searchFiltersDiv.style.display = "flex";
   if (trendingContainer) trendingContainer.style.display = "none";
   if (historyBox) historyBox.style.display = "none";
+
+  // Explicitly maintain search box visibility based on mode
+  if (aiMode) {
+      if (searchBoxStandard) searchBoxStandard.style.display = "none";
+      if (searchBoxAi) searchBoxAi.style.display = "flex";
+      if (mainWrap) mainWrap.classList.add("ai-active");
+  } else {
+      if (searchBoxStandard) searchBoxStandard.style.display = "flex";
+      if (searchBoxAi) searchBoxAi.style.display = "none";
+      if (mainWrap) mainWrap.classList.remove("ai-active");
+  }
+
   if (pageNumber === 1) saveHistory(query);
   applyFilterActiveState(currentFilter);
   if (!skipHistory) {
@@ -2365,6 +2453,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   } else {
     writeBrowserSearchState({ query: "" }, true);
   }
+  
+  // Start listening for "Hey IndiaSearch" (if permissions allowed)
+  startWakeWordDetection();
 });
 // Final Initialization
 updateUserUI();

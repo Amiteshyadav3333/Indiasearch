@@ -2694,23 +2694,39 @@ body {
     width: 90%;
     max-width: 800px;
     min-height: 80px;
-    background: rgba(15, 15, 20, 0.85);
-    backdrop-filter: blur(30px) saturate(200%);
+    background: rgba(15, 15, 20, 0.9);
+    backdrop-filter: blur(40px) saturate(210%);
     border: 1.5px solid rgba(138, 91, 238, 0.4);
     border-radius: 24px;
     padding: 16px 20px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
     overflow: hidden;
     z-index: 1000;
-    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.4), 0 0 20px rgba(138, 91, 238, 0.15);
+    box-shadow: 0 -15px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(138, 91, 238, 0.2);
     animation: slideUpAi 0.5s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+    transition: all 0.3s ease;
 }
 
 @keyframes slideUpAi {
     from { opacity: 0; transform: translate(-50%, 40px); }
     to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+@media (max-width: 600px) {
+    .ai-mode-box {
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        transform: none;
+        border-radius: 24px 24px 0 0;
+        padding: 14px 16px calc(env(safe-area-inset-bottom, 12px) + 10px);
+        background: rgba(10, 11, 15, 0.95);
+        border-left: none;
+        border-right: none;
+        border-bottom: none;
+    }
 }
 
 .ai-pdf-preview {
@@ -2743,22 +2759,24 @@ body {
     position: relative;
     z-index: 2;
     display: flex;
-    align-items: flex-end;
-    gap: 15px;
+    align-items: flex-start; /* Ensure text starts from the top */
+    gap: 12px;
 }
 
 #aiSearchInput {
     background: transparent;
     border: none;
     color: #f8fafc;
-    font-size: 17px;
+    font-size: 16px; /* Best for mobile inputs to prevent iOS zoom */
     font-family: var(--font-main);
     flex: 1;
     resize: none;
     outline: none;
-    line-height: 1.4;
-    padding: 8px 0;
-    max-height: 150px;
+    line-height: 1.5;
+    padding: 4px 0;
+    min-height: 40px;
+    max-height: 180px;
+    overflow-y: auto;
 }
 
 #aiSearchInput::placeholder {
