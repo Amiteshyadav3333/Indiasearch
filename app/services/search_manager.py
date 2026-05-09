@@ -178,7 +178,7 @@ async def identify_intent(query: str) -> str:
         return "aadhaar"
 
     # Jugaad/Local Intent
-    if any(k in q for k in ["jugaad", "repair shop", "mechanic near me", "electrician near me", "plumber"]):
+    if any(k in q for k in ["jugaad", "repair shop", "mechanic near me", "electrician near me", "plumber", "business", "startup", "market", "shop", "showroom", "factory"]):
         return "jugaad"
 
     # Courts Intent
@@ -240,7 +240,7 @@ def get_direct_hit(query: str) -> list:
         
     return []
 
-async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", lang: str = "en", force_ai: bool = False, pdf_content: str = None, age_verified: bool = False, advanced_mode: bool = False, history: list = None) -> dict:
+async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", lang: str = "en", force_ai: bool = False, pdf_content: str = None, age_verified: bool = False, advanced_mode: bool = False, history: list = None, lat: float = None, lon: float = None) -> dict:
     """
     Master Orchestrator implementing the user's requested architecture.
     """
@@ -296,12 +296,46 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
     elif intent == "irctc" or filter == "irctc":
         en_query = f"{en_query} (site:irctc.co.in OR site:indianrail.gov.in)"
     
-    logger.info(f"[Brain] Query: {query!r} | Intent: {intent} | Detected Lang: {detected_lang} | Output Lang: {output_language}")
+    # ── Step 1.2: General India Context ───────────────────
+    if intent == "general" and not is_local_query:
+        # Subtle boost for general queries to prefer Indian content
+        if "india" not in en_query.lower():
+            en_query_for_web = f"{en_query} India"
+        else:
+            en_query_for_web = en_query
+    else:
+        en_query_for_web = en_query
+
+    logger.info(f"[Brain] Query: {query!r} | Intent: {intent} | Detected Lang: {detected_lang} | Output Lang: {output_language} | Loc: {lat},{lon}")
+
+    # ── Step 1.5: Location Enhancement ────────────────────
+    local_keywords = ["near me", "nearby", "around me", "in my city", "local"]
+    is_local_query = any(k in en_query.lower() for k in local_keywords) or intent in ["jugaad", "weather"]
+    
+    if is_local_query and lat and lon:
+        # For local queries, we want to prioritize results from the user's vicinity.
+        # We'll append a "near [lat, lon]" hint to the query for the web search engines.
+        # If in advanced mode, we try to be even more specific.
+        
+        location_hint = f"{lat},{lon}"
+        
+        # Try to get city name for better search (Mocking a simple lookup or using coords)
+        # In a real-world scenario, we'd use a geocoding service here.
+        # For now, we'll use the coordinates which most search engines understand.
+        
+        if advanced_mode:
+            en_query = f"{en_query} in my local market near {location_hint}"
+        else:
+            en_query = f"{en_query} near {location_hint}"
+            
+        logger.info(f"[Brain] Local enhancement triggered: {en_query}")
 
     # ── Step 2: Normalize query + Cache Check ──────────────
     # Normalize: "Weather in Delhi" == "delhi weather" → same cache key
     normalized = normalize_query(en_query)
-    cache_key = CacheManager.make_key("brain:search:v7", detected_lang, output_language, normalized, page, intent, filter, "advanced" if advanced_mode else "standard")
+    # Round lat/lon to 2 decimal places (approx 1km accuracy) for cache stability
+    loc_suffix = f":{round(lat, 2)}:{round(lon, 2)}" if lat and lon else ""
+    cache_key = CacheManager.make_key("brain:search:v7", detected_lang, output_language, normalized, page, intent, filter, "advanced" if advanced_mode else "standard") + loc_suffix
     
     # Record this query for hot cache warming
     hot_query_store.record_query(normalized)
@@ -335,24 +369,24 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
 
     if filter == "news":
         logger.info("[Brain] News filter active. Using news API plus web fallback.")
-        tasks.append(asyncio.create_task(news_service.fetch_news(en_query)))
+        tasks.append(asyncio.create_task(news_service.fetch_news(en_query_for_web)))
     elif dedicated_api_filter:
         logger.info(f"[Brain] Dedicated API filter active: {filter}. Skipping generic web search.")
     elif filter == "images":
         # Multi-source image search so the tab still works if a paid API/key is unavailable.
-        tasks.append(asyncio.create_task(api_client.search_images(en_query, max_results=MAX_WEB_RESULTS)))
-        tasks.append(asyncio.create_task(duckduckgo_client.search_images(en_query, max_results=MAX_WEB_RESULTS)))
-        tasks.append(asyncio.create_task(yahoo_client.search_images(en_query, max_results=MAX_WEB_RESULTS)))
+        tasks.append(asyncio.create_task(api_client.search_images(en_query_for_web, max_results=MAX_WEB_RESULTS)))
+        tasks.append(asyncio.create_task(duckduckgo_client.search_images(en_query_for_web, max_results=MAX_WEB_RESULTS)))
+        tasks.append(asyncio.create_task(yahoo_client.search_images(en_query_for_web, max_results=MAX_WEB_RESULTS)))
     elif filter == "videos":
         # Multi-source video search with thumbnail normalization.
-        tasks.append(asyncio.create_task(api_client.search_videos(en_query, max_results=MAX_WEB_RESULTS)))
-        tasks.append(asyncio.create_task(duckduckgo_client.search_videos(en_query, max_results=MAX_WEB_RESULTS)))
+        tasks.append(asyncio.create_task(api_client.search_videos(en_query_for_web, max_results=MAX_WEB_RESULTS)))
+        tasks.append(asyncio.create_task(duckduckgo_client.search_videos(en_query_for_web, max_results=MAX_WEB_RESULTS)))
     else:
         # 1. Local Elasticsearch
         tasks.append(asyncio.create_task(ElasticClient.search_async(en_query, max_results=MAX_WEB_RESULTS)))
         
         # 2. DuckDuckGo (Free Web)
-        tasks.append(asyncio.create_task(duckduckgo_client.search(en_query, max_results=MAX_WEB_RESULTS)))
+        tasks.append(asyncio.create_task(duckduckgo_client.search(en_query_for_web, max_results=MAX_WEB_RESULTS)))
         
         # 3. Yahoo (Free Web)
         tasks.append(asyncio.create_task(yahoo_client.search(en_query, max_results=MAX_WEB_RESULTS)))

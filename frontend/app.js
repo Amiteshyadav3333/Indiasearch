@@ -132,7 +132,9 @@ let authState = {
   user: null,
   isGuest: true,
   sessionToken: localStorage.getItem("sessionToken") || "",
-  guestId: localStorage.getItem("guestSession") || `guest_${Math.random().toString(36).substr(2, 9)}`
+  guestId: localStorage.getItem("guestSession") || `guest_${Math.random().toString(36).substr(2, 9)}`,
+  location: JSON.parse(localStorage.getItem("userLocation")) || null,
+  locationChoiceMade: localStorage.getItem("locationChoiceMade") === "true"
 };
 
 let activeQuery = ""; // Persistent query for pagination and filter switches
@@ -707,6 +709,68 @@ function toggleVoiceSearch() {
   })();
 }
 
+// ── Location Services ──
+function requestLocation() {
+    if (!navigator.geolocation) {
+        alert("Geolocation is not supported by your browser");
+        return;
+    }
+
+    const btn = document.getElementById("locationButton");
+    if (btn) btn.classList.add("loading-loc");
+
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            const { latitude, longitude } = position.coords;
+            authState.location = { lat: latitude, lon: longitude };
+            localStorage.setItem("userLocation", JSON.stringify(authState.location));
+            
+            if (btn) {
+                btn.classList.remove("loading-loc");
+                btn.classList.add("loc-active");
+                btn.style.color = "var(--accent-green)";
+            }
+            
+            console.log("Location updated:", authState.location);
+            // Optional: Show a small toast or update UI to show city name
+            if (activeQuery) search(1, false, { replaceHistory: true });
+        },
+        (error) => {
+            console.error("Location error:", error);
+            if (btn) btn.classList.remove("loading-loc");
+            alert("Unable to retrieve your location. Please check your browser permissions.");
+        },
+        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+    );
+}
+
+// Auto-load location if already granted in this session
+if (authState.location) {
+    const btn = document.getElementById("locationButton");
+    if (btn) {
+        btn.classList.add("loc-active");
+        btn.style.color = "var(--accent-green)";
+    }
+}
+
+function closeLocationPopup() {
+    const modal = document.getElementById("locationPopup");
+    if (modal) modal.style.display = "none";
+}
+
+function handleLocationChoice(enabled) {
+    authState.locationChoiceMade = true;
+    localStorage.setItem("locationChoiceMade", "true");
+    closeLocationPopup();
+    
+    if (enabled) {
+        requestLocation();
+    } else {
+        // Just proceed with search without location
+        search(1, false, { replaceHistory: true });
+    }
+}
+
 // ── Camera ──
 let scannerStream = null;
 let scannerActive = false;
@@ -1199,6 +1263,17 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
     writeBrowserSearchState({ query, page: pageNumber, filter: currentFilter, aiMode }, replaceHistory);
   }
 
+  // ── Advanced Mode Location Check ──
+  if (advancedMode && !authState.location && !authState.locationChoiceMade) {
+      const modal = document.getElementById("locationPopup");
+      if (modal) {
+          modal.style.display = "flex";
+          // Stop the search here, wait for user choice
+          resultsBox.innerHTML = "";
+          return;
+      }
+  }
+
   const targetLang = currentLanguage || languageSelect.value || "en";
 
   // Skeleton loader
@@ -1238,6 +1313,11 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
     });
     const finalSess = authState.sessionToken || authState.guestId;
     params.set("session_token", finalSess);
+    
+    if (authState.location) {
+        params.set("lat", String(authState.location.lat));
+        params.set("lon", String(authState.location.lon));
+    }
 
     const res = await fetchWithApiFallback(`/search?${params}`);
     let data;

@@ -183,6 +183,12 @@
               <circle cx="12" cy="13" r="4" />
             </svg>
           </button>
+          <button onclick="requestLocation()" id="locationButton" class="icon-btn" title="Use My Location">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+              <circle cx="12" cy="10" r="3" />
+            </svg>
+          </button>
           <div class="s-divider"></div>
           <button onclick="enterAiMode()" class="btn-ai-toggle" title="Switch to AI Mode">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
@@ -516,6 +522,34 @@
         </button>
       </div>
       <img id="zoomedImage" class="zoomed-img" src="" alt="Zoomed Image">
+    </div>
+  </div>
+
+  <!-- ═══ LOCATION POPUP (ADVANCED MODE) ═══ -->
+  <div id="locationPopup" class="overlay-modal" style="display:none;"
+    onclick="if(event.target===this)closeLocationPopup()">
+    <div class="auth-card location-popup-card">
+      <div class="auth-header">
+        <h2>📍 Localized Search</h2>
+        <button class="close-btn" onclick="closeLocationPopup()">&times;</button>
+      </div>
+      <div style="padding: 20px; text-align: center;">
+        <p style="color: var(--text-secondary); margin-bottom: 20px; line-height: 1.6;">
+          Advanced Search ko behtar banane ke liye, kya hum aapki location use kar sakte hain?
+          Isse aapko apne shehar (apni city ka local search milega) ke local businesses aur startups ki sahi jankari
+          milegi.
+        </p>
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <button onclick="handleLocationChoice(true)" class="btn-primary"
+            style="background: var(--accent-green); border-color: var(--accent-green);">
+            Ha, Location Enable Karein
+          </button>
+          <button onclick="handleLocationChoice(false)" class="btn-primary"
+            style="background: var(--bg-alt); color: var(--text-primary); border-color: var(--border);">
+            Nahi, Bina Location ke Search Karein
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 

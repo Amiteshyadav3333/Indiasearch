@@ -30,9 +30,17 @@ SOURCE_WEIGHTS = {
 # Domains we trust more (India-centric + authority sites)
 TRUSTED_DOMAINS = {
     "wikipedia.org": 0.3,
-    "ndtv.com": 0.2,
-    "thehindu.com": 0.2,
-    "indiatimes.com": 0.15,
+    "ndtv.com": 0.4,
+    "thehindu.com": 0.4,
+    "indiatimes.com": 0.35,
+    "indianexpress.com": 0.35,
+    "jagran.com": 0.4,
+    "amarujala.com": 0.4,
+    "dainikbhaskar.com": 0.4,
+    "gadgets360.com": 0.3,
+    "moneycontrol.com": 0.3,
+    "sarkariresult.com": 0.5,
+    "upsc.gov.in": 0.5,
     "bbc.com": 0.25,
     "reuters.com": 0.25,
     "github.com": 0.2,
@@ -51,15 +59,23 @@ def _query_match_score(result: dict, query: str) -> float:
 
 
 def _domain_authority(url: str) -> float:
-    """Return a small authority bonus for known trusted domains."""
+    """Return a small authority bonus for known trusted domains + Indian TLD boost."""
+    score = 0.0
     try:
-        domain = urlparse(url).netloc.replace("www.", "")
+        domain = urlparse(url).netloc.replace("www.", "").lower()
+        
+        # 1. Indian TLD Boost (Heavy)
+        indian_tlds = [".in", ".gov.in", ".nic.in", ".res.in", ".ac.in", ".co.in", ".org.in", ".gen.in", ".firm.in", ".ind.in", ".net.in"]
+        if any(domain.endswith(tld) for tld in indian_tlds):
+            score += 0.8
+            
+        # 2. Known Trusted Domains
         for d, bonus in TRUSTED_DOMAINS.items():
             if domain.endswith(d):
-                return bonus
+                score += bonus
     except Exception:
         pass
-    return 0.0
+    return score
 
 
 def rank(results: list, query: str) -> list:

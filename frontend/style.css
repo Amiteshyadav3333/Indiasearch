@@ -61,7 +61,7 @@
   --text-muted: #5f6368;
   --text-link: #8ab4f8;
   --text-link-visited: #c58af9;
-  --text-url: #5cbc88;
+  --text-url: #81c995;
 
   --accent-blue: #5a9bff;
   --accent-blue-soft: #1a2744;
@@ -336,6 +336,7 @@ body {
   --bg-card: #0f172a;
   --text-primary: #f8fafc;
   --text-secondary: #94a3b8;
+  --text-url: #81c995; /* Brighter green for better visibility on deep dark */
   --border: rgba(255, 255, 255, 0.1);
   --glass-bg: rgba(17, 24, 39, 0.85);
 }
@@ -798,6 +799,22 @@ body {
   transition: all var(--transition);
 }
 .icon-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+/* Location Button States */
+.icon-btn.loading-loc {
+  animation: loc-pulse 1.5s infinite;
+  color: var(--accent-blue);
+}
+
+.icon-btn.loc-active {
+  color: var(--accent-green) !important;
+}
+
+@keyframes loc-pulse {
+  0% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.1); }
+  100% { opacity: 1; transform: scale(1); }
+}
 .icon-btn.listening {
   background: #ea4335;
   color: #fff;
@@ -1982,6 +1999,7 @@ body {
 .ai-link-url {
   font-size: 13px;
   color: var(--text-url);
+  font-weight: 600;
 }
 
 @media (max-width: 640px) {
@@ -2046,7 +2064,7 @@ body {
 .result-host {
   font-size: 13px;
   color: var(--text-url);
-  font-weight: 500;
+  font-weight: 600;
 }
 .result-title {
   display: block;
