@@ -89,7 +89,7 @@ def _yahoo_sync_search(query: str, max_results: int = 10) -> list:
 
 async def search(query: str, max_results: int = 10) -> list:
     """Async Yahoo search — offloads blocking call to thread pool."""
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     return await loop.run_in_executor(
         _executor, _yahoo_sync_search, query, max_results
     )
@@ -132,7 +132,7 @@ def _yahoo_sync_images(query: str, max_results: int = 20) -> list:
 
 async def search_images(query: str, max_results: int = 20) -> list:
     """Async Yahoo Image search."""
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     return await loop.run_in_executor(
         _executor, _yahoo_sync_images, query, max_results
     )

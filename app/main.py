@@ -34,6 +34,7 @@ from app.utils import translator
 from app.services.crawler_service import Crawler, SEED_URLS
 from app.cache import hot_query_store
 from app.api import nutrition
+from app.models import about_content
 
 # --- Logging Setup ---
 logging.basicConfig(
@@ -47,6 +48,7 @@ logger = logging.getLogger("IndiasearchAPI")
 app = FastAPI(title="IndiaSearch Intelligent Engine")
 app.include_router(nutrition.router)
 auth_store.init_db()
+about_content.init_about_db()
 
 app.add_middleware(
     CORSMiddleware,
@@ -80,6 +82,7 @@ async def hot_cache_warmer_task():
 async def startup_event():
     asyncio.create_task(daily_crawler_task())
     asyncio.create_task(hot_cache_warmer_task())
+
 # --- Mount Static Files ---
 FRONTEND_PATH = os.path.join(os.path.dirname(__file__), "..", "frontend")
 
@@ -188,7 +191,7 @@ async def search(q: str, page: int = 1, filter: str = "all", lang: str = "en", o
         if valid_session_token:
             user = auth_store.get_user_by_session(valid_session_token)
             if user:
-                auth_store.save_search_query(user["id"], q)
+                auth_store.add_search_history(user["id"], q, filter, ai_mode)
 
         return response
     except Exception as e:
@@ -285,9 +288,88 @@ async def read_article(url: str):
             async with session.get(url, timeout=10) as resp:
                 soup = BeautifulSoup(await resp.text(), "html.parser")
                 text = "\n".join([p.get_text() for p in soup.find_all("p")])
-                return {"title": soup.title.string, "content": text[:10000]}
-    except:
+                title = soup.title.string if soup.title and soup.title.string else "Untitled"
+                return {"title": title, "content": text[:10000]}
+    except Exception as e:
+        logger.warning(f"[ReadArticle] Failed to read {url}: {e}")
         return {"error": "Blocked"}
+
+# ── About Content Management (Admin Only) ──
+@app.get("/about-content")
+async def get_about_data():
+    return about_content.get_about_content()
+
+def is_admin(session_token: str | None):
+    if not session_token: return False
+    user = auth_store.get_user_by_session(session_token)
+    if not user: return False
+    # The founder's email/identifier should be set in environment
+    admin_id = os.getenv("ADMIN_IDENTIFIER", "amitesh@indiasearch.site")
+    return user["identifier"] == admin_id
+
+@app.post("/about-content/publication")
+async def upload_publication(
+    title: str = Form(...),
+    description: str = Form(...),
+    pub_type: str = Form("paper"),
+    file: UploadFile = File(...),
+    session_token: str = Form(...)
+):
+    if not is_admin(session_token):
+        return JSONResponse({"error": "Admin access required"}, 403)
+    
+    try:
+        # Save file locally
+        file_ext = file.filename.split(".")[-1]
+        safe_name = f"pub_{int(time.time())}.{file_ext}"
+        save_path = os.path.join("uploads", "about", safe_name)
+        with open(save_path, "wb") as f:
+            f.write(await file.read())
+        
+        file_url = f"/uploads/about/{safe_name}"
+        about_content.add_publication(title, description, file_url, pub_type)
+        return {"message": "Publication added successfully", "url": file_url}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, 500)
+
+@app.post("/about-content/media")
+async def upload_media(
+    title: str = Form(...),
+    video_url: str = Form(...), # Usually a YouTube link
+    thumbnail: UploadFile = File(None),
+    session_token: str = Form(...)
+):
+    if not is_admin(session_token):
+        return JSONResponse({"error": "Admin access required"}, 403)
+    
+    try:
+        thumb_url = None
+        if thumbnail:
+            file_ext = thumbnail.filename.split(".")[-1]
+            safe_name = f"thumb_{int(time.time())}.{file_ext}"
+            save_path = os.path.join("uploads", "about", safe_name)
+            with open(save_path, "wb") as f:
+                f.write(await thumbnail.read())
+            thumb_url = f"/uploads/about/{safe_name}"
+        
+        about_content.add_media(title, video_url, thumb_url)
+        return {"message": "Media added successfully"}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, 500)
+
+@app.delete("/about-content/publication/{pub_id}")
+async def delete_pub(pub_id: int, session_token: str):
+    if not is_admin(session_token):
+        return JSONResponse({"error": "Admin access required"}, 403)
+    about_content.delete_publication(pub_id)
+    return {"message": "Deleted"}
+
+@app.delete("/about-content/media/{media_id}")
+async def delete_med(media_id: int, session_token: str):
+    if not is_admin(session_token):
+        return JSONResponse({"error": "Admin access required"}, 403)
+    about_content.delete_media(media_id)
+    return {"message": "Deleted"}
 
 # Explicit routes for favicon and SEO files (must be BEFORE StaticFiles mount)
 @app.get("/favicon.ico", include_in_schema=False)
@@ -325,4 +407,5 @@ async def robots():
     return PlainTextResponse(content)
 
 # Finally, mount the frontend directory to serve app.js, style.css, etc.
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 app.mount("/", StaticFiles(directory=FRONTEND_PATH), name="frontend")

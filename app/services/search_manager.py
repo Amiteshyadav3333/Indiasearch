@@ -134,9 +134,11 @@ async def identify_intent(query: str) -> str:
     """
     q = query.lower().strip()
     
+    # Image Intent
+    if any(k in q for k in ["picture", "image", "photo", "pic", "wallpaper", "photograph", "img"]):
+        return "images"
+    
     # AI Mode Intent
-    if any(k in q for k in ["ask ai", "ai mode", "askai", "tell me about"]):
-        return "ai"
     
     # News Intent
     if any(k in q for k in ["news", "latest", "breaking", "update", "samachar", "khabar"]):
@@ -361,11 +363,24 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
     elif intent == "finance":
         special_data = await finance_service.fetch_stock(en_query)
         sources_used.append("finance_api")
+    elif intent == "images" and filter == "all":
+        # Smart Image Gallery for "All" tab when user asks for pictures
+        logger.info("[Brain] Image intent detected in 'All' filter. Fetching top images.")
+        tasks.append(asyncio.create_task(api_client.search_images(en_query_for_web, max_results=8)))
+        tasks.append(asyncio.create_task(duckduckgo_client.search_images(en_query_for_web, max_results=8)))
 
     # ── Level 2: Parallel Search (Local + Web) ────────────
     tasks = []
+    image_tasks = []
     
     dedicated_api_filter = filter in ["weather", "score", "stock", "finance"]
+
+    if intent == "images" and filter == "all":
+        # Smart Image Gallery for "All" tab when user asks for pictures
+        logger.info("[Brain] Image intent detected in 'All' filter. Fetching top images.")
+        image_tasks.append(asyncio.create_task(api_client.search_images(en_query_for_web, max_results=8)))
+        image_tasks.append(asyncio.create_task(duckduckgo_client.search_images(en_query_for_web, max_results=8)))
+        image_tasks.append(asyncio.create_task(yahoo_client.search_images(en_query_for_web, max_results=8)))
 
     if filter == "news":
         logger.info("[Brain] News filter active. Using news API plus web fallback.")
@@ -423,6 +438,22 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
         except Exception as e:
             logger.error(f"[Brain] Parallel search error: {e}")
 
+    # Process Smart Images if any
+    top_images = []
+    if image_tasks:
+        img_done, img_pending = await asyncio.wait(image_tasks, timeout=PARALLEL_TIMEOUT)
+        img_collections = []
+        for t in img_done:
+            try:
+                r = await t
+                if r: img_collections.append(r)
+            except: pass
+        for t in img_pending: t.cancel()
+        
+        if img_collections:
+            flat_imgs = [item for sublist in img_collections for item in sublist]
+            top_images = [normalize_media_result(img, "image") for img in flat_imgs][:12]
+
     # Cancel slow tasks
     for task in pending: task.cancel()
 
@@ -439,28 +470,7 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
         src = r.get("source")
         if src and src not in sources_used: sources_used.append(src)
 
-    # ── Level 4: Paid Fallback Chain — Only if quality is insufficient ──
-    quota = api_client.get_quota_status()
-    local_quality_ok = ranking_service.quality_check(filtered_results, min_results=MIN_QUALITY_RESULTS)
-    
-    if not local_quality_ok and intent not in ["weather", "sports", "finance"] and not dedicated_api_filter:
-        logger.info(f"[Brain] Local quality insufficient ({len(filtered_results)} results). Triggering paid API fallback.")
-        api_res = await api_client.search(en_query, max_results=MAX_WEB_RESULTS)
-        if api_res:
-            sources_used.append("fallback_api")
-            for r in api_res:
-                src = r.get("source")
-                if src and src not in sources_used:
-                    sources_used.append(src)
-            filtered_results = merge_service.merge_and_deduplicate([filtered_results, api_res])
-            quota = api_client.get_quota_status()
-        else:
-            logger.warning("[Brain] Paid fallback returned no results. Staying with free results.")
-    else:
-        quota = api_client.get_quota_status()
-        if local_quality_ok:
-            logger.info(f"[Brain] ✅ Local results sufficient ({len(filtered_results)}). Skipping paid API.")
-
+    # ── Level 4: News & Dedicated Filter Fallbacks ─────────
     if filter == "news" and len(filtered_results) < MIN_QUALITY_RESULTS:
         fallback_news = await resilient_web_results(f"{en_query} latest news India", MAX_WEB_RESULTS)
         if fallback_news:
@@ -479,8 +489,31 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
         if fallback_results:
             filtered_results = merge_service.merge_and_deduplicate([filtered_results, fallback_results])
 
-    # ── Level 5: Rank & Fresh Indexing ────────────────────
+    # ── Level 5: Rank first, THEN check quality ──────────
     final_ranked = ranking_service.rank(filtered_results, en_query)
+
+    # ── Level 5.5: Paid Fallback Chain — Only if quality is insufficient ──
+    # quality_check reads _rank_score which is set by rank(), so must come AFTER ranking
+    quota = api_client.get_quota_status()
+    local_quality_ok = ranking_service.quality_check(final_ranked, min_results=MIN_QUALITY_RESULTS)
+    
+    if not local_quality_ok and intent not in ["weather", "sports", "finance"] and not dedicated_api_filter:
+        logger.info(f"[Brain] Local quality insufficient ({len(final_ranked)} results). Triggering paid API fallback.")
+        api_res = await api_client.search(en_query, max_results=MAX_WEB_RESULTS)
+        if api_res:
+            sources_used.append("fallback_api")
+            for r in api_res:
+                src = r.get("source")
+                if src and src not in sources_used:
+                    sources_used.append(src)
+            combined = merge_service.merge_and_deduplicate([final_ranked, api_res])
+            final_ranked = ranking_service.rank(combined, en_query)
+            quota = api_client.get_quota_status()
+        else:
+            logger.warning("[Brain] Paid fallback returned no results. Staying with free results.")
+    else:
+        if local_quality_ok:
+            logger.info(f"[Brain] ✅ Local results sufficient ({len(final_ranked)}). Skipping paid API.")
     
     # ASYNC TASK: Index fresh results in background for future fast search
     if filtered_results:
@@ -534,6 +567,7 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
         "results": paginated,
         "intent": intent,
         "special_data": special_data,
+        "top_images": top_images,
         "knowledge_panel": knowledge_panel,
         "ai_summary": ai_summary if filter not in ["images", "videos"] else None,
         "ai_sources": build_ai_sources(final_ranked) if filter not in ["images", "videos"] and page == 1 else [],

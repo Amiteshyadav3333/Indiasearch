@@ -102,7 +102,7 @@ class ElasticClient:
     @classmethod
     async def search_async(cls, query: str, index: str = "indiasearch", max_results: int = 10) -> list:
         """Async search wrapper."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(_executor, cls.search, query, index, max_results)
 
     @classmethod
@@ -121,6 +121,6 @@ class ElasticClient:
     @classmethod
     async def index_async(cls, doc: dict, doc_id: str = None, index: str = "indiasearch") -> bool:
         """Async index wrapper."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(_executor, cls.index_doc, doc, doc_id, index)
 

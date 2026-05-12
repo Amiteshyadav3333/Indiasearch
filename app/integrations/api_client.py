@@ -146,7 +146,7 @@ async def search(query: str, max_results: int = 10) -> list:
     Async paid fallback wrapper.
     Bing gets the first chance. Serper is called only if Bing gives no usable results.
     """
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     bing_results = await loop.run_in_executor(
         _executor, _bing_sync_search, query, max_results
     )
@@ -197,7 +197,7 @@ def _serper_sync_images(query: str, max_results: int = 20) -> list:
         return []
 
 async def search_images(query: str, max_results: int = 20) -> list:
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     return await loop.run_in_executor(_executor, _serper_sync_images, query, max_results)
 
 def _serper_sync_videos(query: str, max_results: int = 20) -> list:
@@ -240,7 +240,7 @@ def _serper_sync_videos(query: str, max_results: int = 20) -> list:
         return []
 
 async def search_videos(query: str, max_results: int = 20) -> list:
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     return await loop.run_in_executor(_executor, _serper_sync_videos, query, max_results)
 
 def get_quota_status() -> dict:

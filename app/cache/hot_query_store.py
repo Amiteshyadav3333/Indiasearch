@@ -37,7 +37,8 @@ async def warm_hot_cache(search_fn, top_n: int = 20):
     for q in top:
         try:
             # Only warm if NOT already in cache
-            cache_key = CacheManager.make_key("brain:search:v5", "en", q, 1, "general", "all")
+            # Must match the key structure in search_manager.run_parallel_pipeline
+            cache_key = CacheManager.make_key("brain:search:v7", "en", "English", q, 1, "general", "all", "standard")
             if not CacheManager.get(cache_key):
                 await search_fn(q, page=1, filter="all")
                 logger.info(f"[HotCache] Warmed: {q!r}")

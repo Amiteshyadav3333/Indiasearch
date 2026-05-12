@@ -46,7 +46,7 @@ def _ddg_sync_search(query: str, max_results: int = 10, region: str = "in-en") -
 
 async def search(query: str, max_results: int = 10, region: str = "in-en") -> list:
     """Async DDG search — offloads blocking call to thread pool."""
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     return await loop.run_in_executor(
         _executor, _ddg_sync_search, query, max_results, region
     )
@@ -72,7 +72,7 @@ def _ddg_sync_images(query: str, max_results: int = 20, region: str = "in-en") -
         return []
 
 async def search_images(query: str, max_results: int = 20, region: str = "in-en") -> list:
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     return await loop.run_in_executor(
         _executor, _ddg_sync_images, query, max_results, region
     )
@@ -100,7 +100,7 @@ def _ddg_sync_videos(query: str, max_results: int = 20, region: str = "in-en") -
         return []
 
 async def search_videos(query: str, max_results: int = 20, region: str = "in-en") -> list:
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     return await loop.run_in_executor(
         _executor, _ddg_sync_videos, query, max_results, region
     )

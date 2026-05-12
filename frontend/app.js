@@ -48,6 +48,7 @@ const historyBox = document.getElementById("searchHistory");
 const paginationContainer = document.getElementById("pagination");
 const siteHeader = document.getElementById("siteHeader");
 const clearSearchBtn = document.getElementById("clearSearchBtn");
+const aboutSection = document.getElementById("aboutSection");
 
 // ── Clear Search Button (Google-style ✕) ──
 function updateClearBtn() {
@@ -474,16 +475,30 @@ async function apiJsonRequest(path, payload, method = "POST") {
 // THEME
 // ═══════════════════════════════════════════
 function toggleMode() {
-  const isDark = document.documentElement.getAttribute("data-theme") === "dark";
-  const next = isDark ? "light" : "dark";
+  const currentTheme = document.documentElement.getAttribute("data-theme") || 
+                       (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  const next = currentTheme === "dark" ? "light" : "dark";
   document.documentElement.setAttribute("data-theme", next);
   localStorage.setItem("theme", next);
 }
 
-// Apply saved theme on load
+// Apply saved theme or detect system preference
 (function applyTheme() {
   const saved = localStorage.getItem("theme");
-  if (saved) document.documentElement.setAttribute("data-theme", saved);
+  if (saved) {
+    document.documentElement.setAttribute("data-theme", saved);
+  } else {
+    // If no manual setting, listen to system preference
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const handleSystemTheme = (e) => {
+      if (!localStorage.getItem("theme")) {
+        document.documentElement.setAttribute("data-theme", e.matches ? "dark" : "light");
+      }
+    };
+    mediaQuery.addEventListener("change", handleSystemTheme);
+    // Initial set
+    document.documentElement.setAttribute("data-theme", mediaQuery.matches ? "dark" : "light");
+  }
 })();
 
 // ═══════════════════════════════════════════
@@ -697,123 +712,118 @@ const STT_LOCALES = {
   sat: "en-IN", sd: "ur-IN", ta: "ta-IN", te: "te-IN", ur: "ur-IN", bh: "bh-IN"
 };
 
-// ── Wake Word & Audio Feedback ──
-let wakeRecognition;
-let isWakeEnabled = false;
-
-function playWakeSound() {
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const oscillator = audioCtx.createOscillator();
-    const gainNode = audioCtx.createGain();
-
-    oscillator.type = 'sine';
-    oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // A5 note
-    oscillator.frequency.exponentialRampToValueAtTime(1320, audioCtx.currentTime + 0.1); // E6 note
-
-    gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-    gainNode.gain.linearRampToValueAtTime(0.1, audioCtx.currentTime + 0.05);
-    gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.2);
-
-    oscillator.connect(gainNode);
-    gainNode.connect(audioCtx.destination);
-
-    oscillator.start();
-    oscillator.stop(audioCtx.currentTime + 0.2);
-}
-
-function startWakeWordDetection() {
-    if (!("webkitSpeechRecognition" in window) || isWakeEnabled) return;
-    
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    wakeRecognition = new SR();
-    wakeRecognition.continuous = true;
-    wakeRecognition.interimResults = true;
-    wakeRecognition.lang = "en-IN";
-
-    wakeRecognition.onresult = (e) => {
-        for (let i = e.resultIndex; i < e.results.length; ++i) {
-            const transcript = e.results[i][0].transcript.toLowerCase();
-            if (transcript.includes("hey india search") || transcript.includes("okay india search") || transcript.includes("ok india search") || transcript.includes("hello india search")) {
-                console.log("Wake word detected!");
-                isWakeEnabled = false; // Temporarily disable to avoid loop
-                wakeRecognition.stop();
-                playWakeSound();
-                setTimeout(() => toggleVoiceSearch(), 300);
-                break;
-            }
-        }
-    };
-
-    wakeRecognition.onend = () => {
-        if (isWakeEnabled && !isListening) {
-            try { wakeRecognition.start(); } catch(e) {}
-        }
-    };
-
-    try {
-        wakeRecognition.start();
-        isWakeEnabled = true;
-        console.log("Wake word detection active: Say 'Hey IndiaSearch'");
-    } catch(e) {
-        console.error("Wake word start failed:", e);
-    }
-}
-
 if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   recognition = new SR();
   recognition.continuous = false;
-  recognition.interimResults = false;
+  recognition.interimResults = true;
+
   recognition.onstart = () => {
     isListening = true;
-    isWakeEnabled = false; 
-    if (wakeRecognition) wakeRecognition.stop(); // Ensure wake word stops when searching
-
-    micButton.classList.add("listening");
-    if (micButtonAi) micButtonAi.classList.add("listening");
+    updateMicUI();
     const target = (searchBoxAi && searchBoxAi.style.display !== "none") ? aiSearchInput : searchInput;
-    target.placeholder = "सुन रहा हूँ… Listening…";
-  };
-  recognition.onresult = e => {
-    const transcript = e.results[0][0].transcript;
-    if (searchBoxAi && searchBoxAi.style.display !== "none") {
-        aiSearchInput.value = transcript;
-        searchAI();
-    } else {
-        searchInput.value = transcript;
-        search();
+    if (target) {
+      target.placeholder = "सुन रहा हूँ… Listening…";
+      target.value = ""; // Clear for new voice input
     }
   };
+
+  recognition.onresult = e => {
+    let interimTranscript = "";
+    let finalTranscript = "";
+
+    for (let i = e.resultIndex; i < e.results.length; ++i) {
+      if (e.results[i].isFinal) {
+        finalTranscript += e.results[i][0].transcript;
+      } else {
+        interimTranscript += e.results[i][0].transcript;
+      }
+    }
+
+    const target = (searchBoxAi && searchBoxAi.style.display !== "none") ? aiSearchInput : searchInput;
+    if (target) {
+      target.value = finalTranscript || interimTranscript;
+      if (target === aiSearchInput) autoExpand(target);
+    }
+
+    if (finalTranscript) {
+      recognition.stop();
+      if (searchBoxAi && searchBoxAi.style.display !== "none") {
+        searchAI();
+      } else {
+        search();
+      }
+    }
+  };
+
   recognition.onend = () => {
     isListening = false;
-    micButton.classList.remove("listening");
-    if (micButtonAi) micButtonAi.classList.remove("listening");
-    if (aiSearchInput) aiSearchInput.placeholder = "Puchho jo aapke mann mein hai... (AI Mode)";
-    
-    // Restart wake word after a short delay
-    setTimeout(() => {
-        isWakeEnabled = true;
-        startWakeWordDetection();
-    }, 1000);
+    updateMicUI();
+    resetPlaceholders();
   };
-  recognition.onerror = () => {
+
+  recognition.onerror = (e) => {
+    console.error("Speech Recognition Error:", e.error);
     isListening = false;
-    micButton.classList.remove("listening");
-    if (micButtonAi) micButtonAi.classList.remove("listening");
+    updateMicUI();
+    resetPlaceholders();
+    
+    if (e.error === 'not-allowed') {
+      alert("Microphone permission denied. Please allow mic access in your browser settings to use voice search.");
+    } else if (e.error === 'no-speech') {
+      // Silently fail or show a small hint, don't alert for just no speech
+      console.log("No speech detected.");
+    } else if (e.error === 'network') {
+      alert("Network error. Voice recognition requires an active internet connection.");
+    }
   };
 }
 
-function toggleVoiceSearch() {
-  if (!recognition) { alert("Voice search not supported in your browser"); return; }
+function updateMicUI() {
   if (isListening) {
-      recognition.stop();
+    micButton?.classList.add("listening");
+    micButtonAi?.classList.add("listening");
   } else {
-      if (wakeRecognition) {
-          isWakeEnabled = false;
-          wakeRecognition.stop();
-      }
+    micButton?.classList.remove("listening");
+    micButtonAi?.classList.remove("listening");
+  }
+}
+
+function resetPlaceholders() {
+  const copy = getUiCopy();
+  const stdPlaceholder = copy.placeholder || "Search anything...";
+  const aiPlaceholder = copy.aiPlaceholder || "Puchho jo aapke mann mein hai... (AI Mode)";
+  
+  if (searchInput) {
+    searchInput.placeholder = stdPlaceholder;
+    if (searchInput.value === "") { /* keep it empty */ }
+  }
+  if (aiSearchInput) {
+    aiSearchInput.placeholder = aiPlaceholder;
+  }
+}
+
+function toggleVoiceSearch() {
+  if (!recognition) {
+    alert("Voice search is not supported in this browser. Please try Chrome or Edge.");
+    return;
+  }
+
+  try {
+    if (isListening) {
+      recognition.stop();
+    } else {
+      // Ensure we have the latest language
       recognition.lang = STT_LOCALES[languageSelect.value] || "en-IN";
       recognition.start();
+    }
+  } catch (err) {
+    console.error("Voice Toggle Error:", err);
+    // If it's already started, ignore. Otherwise reset state.
+    if (err.name !== 'InvalidStateError') {
+      isListening = false;
+      updateMicUI();
+    }
   }
 }
 
@@ -1211,6 +1221,7 @@ async function resetToHome(options = {}) {
   if (trendingContainer) trendingContainer.style.display = "block";
   if (historyBox) historyBox.style.display = "flex";
   if (heroSection) heroSection.classList.remove("hidden");
+  if (aboutSection) aboutSection.style.display = "block";
   if (scanStatus) scanStatus.textContent = "";
   
   // Clear file inputs and visual previews
@@ -1369,6 +1380,7 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
   if (searchFiltersDiv) searchFiltersDiv.style.display = "flex";
   if (trendingContainer) trendingContainer.style.display = "none";
   if (historyBox) historyBox.style.display = "none";
+  if (aboutSection) aboutSection.style.display = "none";
 
   // Explicitly maintain search box visibility based on mode
   if (aiMode) {
@@ -1606,6 +1618,11 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
     if (currentFilter === "images" && data.warning) {
       const tw = await translateText(data.warning, targetLang);
       aiSummaryBox.innerHTML = `<div class="image-warning-bar">${tw}</div>` + aiSummaryBox.innerHTML;
+    }
+
+    // ── Smart Image Gallery ──
+    if (data.top_images && data.top_images.length > 0 && currentFilter === "all") {
+        aiSummaryBox.innerHTML = renderSmartImageGallery(data.top_images) + aiSummaryBox.innerHTML;
     }
 
     // If NO results at all (no web results AND no weather/summary/sports/stocks)
@@ -2215,6 +2232,35 @@ async function initHomeWidgets() {
   // Logic removed as per user request to use real-time search intent instead.
 }
 
+function renderSmartImageGallery(images) {
+    if (!images || images.length === 0) return "";
+    
+    const items = images.map(img => {
+        const cleanUrl = img.image.replace(/'/g, "%27");
+        const fallback = mediaFallbackImage(img.title, "Image");
+        return `
+            <div class="image-card" style="margin-bottom: 0;">
+                <div class="image-frame" onclick="openImageModal('${cleanUrl}')">
+                    <img src="${img.image}" alt="${escapeHtml(img.title)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src='${fallback}'">
+                </div>
+            </div>
+        `;
+    }).join("");
+
+    return `
+        <div class="smart-image-section" style="margin-bottom: 30px;">
+            <div class="section-label" style="display:flex; align-items:center; gap:8px; margin-bottom:12px; font-weight:800; font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                Instant Image Gallery
+            </div>
+            <div class="image-grid" style="grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px;">
+                ${items}
+            </div>
+            <div style="margin-top: 12px; border-bottom: 1px solid var(--border);"></div>
+        </div>
+    `;
+}
+
 function renderWeatherPanel(w) {
   return `
     <div class="weather-card animate-slide-up">
@@ -2489,9 +2535,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   } else {
     writeBrowserSearchState({ query: "" }, true);
   }
-  
-  // Start listening for "Hey IndiaSearch" (if permissions allowed)
-  startWakeWordDetection();
 });
 // Final Initialization
 updateUserUI();
@@ -2541,4 +2584,144 @@ function compressImage(file, maxWidth = 800) {
     };
     img.src = URL.createObjectURL(file);
   });
+}
+
+// ── ABOUT PAGE CONTROLS ──
+function openAboutPage(e) {
+  if (e) e.preventDefault();
+  const overlay = document.getElementById("aboutOverlay");
+  if (overlay) {
+    overlay.style.display = "flex";
+    document.body.style.overflow = "hidden"; // Prevent background scroll
+  }
+}
+
+function closeAboutPage() {
+  const overlay = document.getElementById("aboutOverlay");
+  if (overlay) {
+    overlay.style.display = "none";
+    document.body.style.overflow = "auto";
+  }
+}
+
+// ── ABOUT PAGE CONTROLS & DYNAMIC CONTENT ──
+const ADMIN_IDENTIFIER = "amitesh@indiasearch.site";
+
+async function openAboutPage(e) {
+  if (e) e.preventDefault();
+  const overlay = document.getElementById("aboutOverlay");
+  if (overlay) {
+    overlay.style.display = "flex";
+    document.body.style.overflow = "hidden";
+    checkAdminStatus();
+    loadAboutContent();
+  }
+}
+
+function closeAboutPage() {
+  const overlay = document.getElementById("aboutOverlay");
+  if (overlay) {
+    overlay.style.display = "none";
+    document.body.style.overflow = "auto";
+  }
+}
+
+function checkAdminStatus() {
+  const panel = document.getElementById("aboutAdminPanel");
+  if (!panel) return;
+  const userIdentifier = authState.user ? (authState.user.email || authState.user.phoneNumber) : null;
+  if (userIdentifier === ADMIN_IDENTIFIER) {
+    panel.style.display = "block";
+  } else {
+    panel.style.display = "none";
+  }
+}
+
+async function loadAboutContent() {
+  try {
+    const res = await fetch(`${activeApiBase}/about-content`);
+    const data = await res.json();
+    renderAboutPublications(data.publications);
+    renderAboutMedia(data.media);
+  } catch (err) {
+    console.error("Failed to load about content:", err);
+  }
+}
+
+function renderAboutPublications(pubs) {
+  const container = document.querySelector(".publication-list");
+  if (!container) return;
+  
+  if (!pubs || pubs.length === 0) {
+    container.innerHTML = `<p style="font-size:13px; color:var(--text-muted);">No publications shared yet.</p>`;
+    return;
+  }
+
+  container.innerHTML = pubs.map(p => `
+    <div class="pub-item">
+      <span class="pub-icon">${p.pub_type === 'book' ? '📚' : '📄'}</span>
+      <div class="pub-info">
+        <h4>${p.title}</h4>
+        <p>${p.description}</p>
+        <a href="${activeApiBase}${p.file_url}" target="_blank" class="view-link">View ${p.pub_type === 'book' ? 'Book' : 'Paper'} →</a>
+      </div>
+    </div>
+  `).join("");
+}
+
+function renderAboutMedia(media) {
+  const container = document.querySelector(".media-grid-mini");
+  if (!container) return;
+  
+  if (!media || media.length === 0) {
+    container.innerHTML = `<div class="media-placeholder"><span>Gallery Empty</span></div>`;
+    return;
+  }
+
+  container.innerHTML = media.map(m => {
+    let thumb = m.thumbnail_url ? `${activeApiBase}${m.thumbnail_url}` : "https://via.placeholder.com/150";
+    if (!m.thumbnail_url && m.video_url.includes("youtube.com")) {
+       const id = m.video_url.split("v=")[1]?.split("&")[0];
+       if (id) thumb = `https://img.youtube.com/vi/${id}/mqdefault.jpg`;
+    }
+
+    return `
+    <div class="media-item-wrap" onclick="window.open('${m.video_url}', '_blank')">
+      <img src="${thumb}" alt="${m.title}" class="media-thumb-img">
+      <div class="media-title-overlay">${m.title}</div>
+    </div>
+  `}).join("");
+}
+
+async function handleAboutUpload(event, type) {
+  event.preventDefault();
+  const form = event.target;
+  const formData = new FormData(form);
+  formData.append("session_token", authState.sessionToken);
+
+  const submitBtn = form.querySelector('button[type="submit"]');
+  const originalText = submitBtn.textContent;
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Uploading...";
+
+  try {
+    const endpoint = type === 'publication' ? '/about-content/publication' : '/about-content/media';
+    const res = await fetch(`${activeApiBase}${endpoint}`, {
+      method: "POST",
+      body: formData
+    });
+    const data = await res.json();
+    if (res.ok) {
+      alert(data.message);
+      form.reset();
+      loadAboutContent();
+    } else {
+      alert(data.error || "Upload failed");
+    }
+  } catch (err) {
+    alert("Server error: " + err.message);
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = originalText;
+  }
 }
