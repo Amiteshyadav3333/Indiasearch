@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-import google.generativeai as genai
+from google import genai
 import base64
 import json
 import re
@@ -12,11 +12,9 @@ router = APIRouter(prefix="/api/nutrition", tags=["nutrition"])
 # Gemini client — uses GEMINI_API_KEY from env
 gemini_key = os.getenv("GEMINI_API_KEY")
 if gemini_key:
-    genai.configure(api_key=gemini_key)
-    # Using gemini-1.5-flash for speed and reliability
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    gemini_client = genai.Client(api_key=gemini_key)
 else:
-    model = None
+    gemini_client = None
 
 SYSTEM_PROMPT = """You are a nutrition expert AI for IndiaSearch, India's search engine.
 Analyze the food/fruit/dish and return ONLY a valid JSON object. No markdown, no explanation, just pure JSON.
@@ -77,15 +75,16 @@ def parse_nutrition_response(text: str) -> dict:
 @router.post("/text")
 async def analyze_by_text(body: TextQuery):
     """Text se food analyze karo — e.g. 'samosa', 'dal roti'"""
-    if not model:
+    if not gemini_client:
         raise HTTPException(status_code=500, detail="GEMINI_API_KEY missing")
     
     if not body.query.strip():
         raise HTTPException(status_code=400, detail="Query empty hai")
 
     try:
-        response = model.generate_content(
-            f"{SYSTEM_PROMPT}\n\nFood item: \"{body.query}\". Per 100g nutrition details do."
+        response = gemini_client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=f"{SYSTEM_PROMPT}\n\nFood item: \"{body.query}\". Per 100g nutrition details do."
         )
         text = response.text
         result = parse_nutrition_response(text)
@@ -101,20 +100,20 @@ async def analyze_by_text(body: TextQuery):
 @router.post("/image")
 async def analyze_by_image(body: ImageQuery):
     """Image se food analyze karo"""
-    if not model:
+    if not gemini_client:
         raise HTTPException(status_code=500, detail="GEMINI_API_KEY missing")
 
     if not body.image_base64:
         raise HTTPException(status_code=400, detail="Image data missing hai")
 
     try:
-        response = model.generate_content([
-            {
-                "mime_type": body.media_type,
-                "data": base64.b64decode(body.image_base64)
-            },
-            f"{SYSTEM_PROMPT}\n\nIs image mein kya food hai? Uski nutrition details do."
-        ])
+        response = gemini_client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=[
+                genai.types.Part.from_bytes(data=base64.b64decode(body.image_base64), mime_type=body.media_type),
+                f"{SYSTEM_PROMPT}\n\nIs image mein kya food hai? Uski nutrition details do."
+            ]
+        )
         text = response.text
         result = parse_nutrition_response(text)
         result["intent"] = "nutrition"

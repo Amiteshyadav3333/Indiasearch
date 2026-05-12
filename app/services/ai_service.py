@@ -1,7 +1,7 @@
 import os
 import re
 import groq
-import google.generativeai as genai
+from google import genai
 from dotenv import load_dotenv
 from app.utils import translator
 
@@ -13,10 +13,9 @@ groq_client = groq.Groq(api_key=groq_api_key, timeout=12.0) if groq_api_key else
 
 gemini_api_key = os.getenv("GEMINI_API_KEY")
 if gemini_api_key:
-    genai.configure(api_key=gemini_api_key)
-    gemini_model = genai.GenerativeModel('gemini-1.5-flash')
+    gemini_client = genai.Client(api_key=gemini_api_key)
 else:
-    gemini_model = None
+    gemini_client = None
 
 def groq_vision_identify(image_b64):
     """Fallback vision identify using Groq"""
@@ -94,7 +93,7 @@ def _language_name_to_code(name="English"):
 
 
 def gemini_chat(query, docs, lang="English", pdf_content=None, intent="general", history=None):
-    if not gemini_model: return None
+    if not gemini_client: return None
 
     # Combine context
     context = _source_context(docs)
@@ -131,7 +130,10 @@ def gemini_chat(query, docs, lang="English", pdf_content=None, intent="general",
     full_prompt += f"CONTEXT:\n{pdf_info}\n{context}\n\nUSER QUERY: {query}"
 
     try:
-        response = gemini_model.generate_content(full_prompt, request_options={"timeout": 12})
+        response = gemini_client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=full_prompt
+        )
         return response.text
     except Exception as e:
         print(f"Gemini API Error: {e}")

@@ -47,6 +47,38 @@ const trendingContainer = document.getElementById("trendingContainer");
 const historyBox = document.getElementById("searchHistory");
 const paginationContainer = document.getElementById("pagination");
 const siteHeader = document.getElementById("siteHeader");
+const clearSearchBtn = document.getElementById("clearSearchBtn");
+
+// ── Clear Search Button (Google-style ✕) ──
+function updateClearBtn() {
+  if (clearSearchBtn) {
+    clearSearchBtn.style.display = searchInput.value.trim() ? "flex" : "none";
+  }
+}
+
+function clearSearchInput() {
+  searchInput.value = "";
+  updateClearBtn();
+  searchInput.focus();
+}
+
+if (searchInput) {
+  // Fires on user typing
+  searchInput.addEventListener("input", updateClearBtn);
+  searchInput.addEventListener("keyup", updateClearBtn);
+  searchInput.addEventListener("focus", updateClearBtn);
+  searchInput.addEventListener("change", updateClearBtn);
+
+  // Catch programmatic .value = "..." changes (trending clicks, voice, history, etc.)
+  const nativeDescriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+  Object.defineProperty(searchInput, 'value', {
+    get() { return nativeDescriptor.get.call(this); },
+    set(val) {
+      nativeDescriptor.set.call(this, val);
+      updateClearBtn();
+    }
+  });
+}
 
 let advancedMode = false;
 let chatHistory = []; // Global chat history for AI Mode
@@ -1171,6 +1203,7 @@ async function resetToHome(options = {}) {
   currentFilter = "all";
   advancedMode = false;
   searchInput.value = "";
+  updateClearBtn();
   resultsBox.innerHTML = "";
   aiSummaryBox.innerHTML = "";
   if (paginationContainer) paginationContainer.innerHTML = "";
@@ -1326,6 +1359,9 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
   // Update activeQuery on new search
   activeQuery = query;
 
+  // Show clear button for current search text
+  updateClearBtn();
+
   closeAutocomplete();
 
   // Transition to search state
@@ -1379,7 +1415,7 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
 
   try {
     if (currentFilter === "nutrition" && pageNumber === 1) {
-      if (aiSummaryBox) aiSummaryBox.innerHTML = `<div class="loading-ai">⏳ Claude is analyzing ${query}...</div>`;
+      if (aiSummaryBox) aiSummaryBox.innerHTML = `<div class="loading-ai">🔍 IndiaSearch is analyzing ${query}...</div>`;
       const data = await analyzeNutritionByText(query);
       if (data.name || data.food_name) {
           resultsBox.innerHTML = "";
@@ -2460,7 +2496,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 // Final Initialization
 updateUserUI();
 
-// ===== CALORY SCANNER (Anthropic Claude Optimized) =====
+// ===== CALORY SCANNER (IndiaSearch AI Powered) =====
 
 function showCaloryScanner() {
   const results = document.getElementById('results');

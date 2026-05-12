@@ -48,7 +48,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=smart-filters-4">
+  <link rel="stylesheet" href="style.css?v=clear-btn-2">
 
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -168,6 +168,12 @@
           </svg>
         </span>
         <input id="searchInput" type="text" placeholder="Kuch bhi search karo…" autocomplete="off" spellcheck="false">
+        <button id="clearSearchBtn" class="search-clear-btn" onclick="clearSearchInput()" title="Clear" style="display:none;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
         <div class="s-actions">
           <button onclick="toggleVoiceSearch()" id="micButton" class="icon-btn" title="Voice Search">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -587,7 +593,7 @@
     </div>
   </div>
 
-  <script src="app.js?v=smooth-ai-media-1"></script>
+  <script src="app.js?v=clear-btn-2"></script>
 </body>
 
 </html>

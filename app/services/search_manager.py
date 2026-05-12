@@ -297,6 +297,9 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
         en_query = f"{en_query} (site:irctc.co.in OR site:indianrail.gov.in)"
     
     # ── Step 1.2: General India Context ───────────────────
+    local_keywords = ["near me", "nearby", "around me", "in my city", "local"]
+    is_local_query = any(k in en_query.lower() for k in local_keywords) or intent in ["jugaad", "weather"]
+
     if intent == "general" and not is_local_query:
         # Subtle boost for general queries to prefer Indian content
         if "india" not in en_query.lower():
@@ -309,9 +312,6 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
     logger.info(f"[Brain] Query: {query!r} | Intent: {intent} | Detected Lang: {detected_lang} | Output Lang: {output_language} | Loc: {lat},{lon}")
 
     # ── Step 1.5: Location Enhancement ────────────────────
-    local_keywords = ["near me", "nearby", "around me", "in my city", "local"]
-    is_local_query = any(k in en_query.lower() for k in local_keywords) or intent in ["jugaad", "weather"]
-    
     if is_local_query and lat and lon:
         # For local queries, we want to prioritize results from the user's vicinity.
         # We'll append a "near [lat, lon]" hint to the query for the web search engines.
