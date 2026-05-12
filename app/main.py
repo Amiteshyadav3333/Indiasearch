@@ -8,6 +8,7 @@ import asyncio
 import re
 import json
 import base64
+import time
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -46,6 +47,11 @@ logger = logging.getLogger("IndiasearchAPI")
 
 # --- App Initialization ---
 app = FastAPI(title="IndiaSearch Intelligent Engine")
+
+# Ensure required directories exist
+os.makedirs("uploads", exist_ok=True)
+os.makedirs(os.path.join("uploads", "about"), exist_ok=True)
+
 app.include_router(nutrition.router)
 auth_store.init_db()
 about_content.init_about_db()
