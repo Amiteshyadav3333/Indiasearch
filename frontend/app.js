@@ -158,6 +158,8 @@ if (aiSearchInput) {
 
 let recognition;
 let isListening = false;
+let activeSpeechButton = null;
+let activeSpeechText = "";
 let attachedScan = null;
 
 // Combined Identity & Session Management
@@ -827,6 +829,147 @@ function toggleVoiceSearch() {
   }
 }
 
+// ═══════════════════════════════════════════
+// RESULT VOICE PLAYBACK (Browser Speech)
+// ═══════════════════════════════════════════
+const TTS_LOCALES = {
+  en: "en-IN", hi: "hi-IN", as: "as-IN", bn: "bn-IN", brx: "hi-IN", doi: "hi-IN",
+  gu: "gu-IN", kn: "kn-IN", ks: "ur-IN", gom: "mr-IN", mai: "hi-IN", ml: "ml-IN",
+  mni: "hi-IN", mr: "mr-IN", ne: "hi-IN", or: "or-IN", pa: "pa-IN", sa: "hi-IN",
+  sat: "hi-IN", sd: "ur-IN", ta: "ta-IN", te: "te-IN", ur: "ur-IN", bho: "hi-IN"
+};
+
+function supportsSpeechPlayback() {
+  return "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
+}
+
+function setSpeechButtonState(button, speaking) {
+  if (!button) return;
+  button.classList.toggle("speaking", speaking);
+  button.setAttribute("aria-pressed", speaking ? "true" : "false");
+  button.title = speaking ? "Stop voice" : "Listen";
+}
+
+function stopSpeechPlayback() {
+  if (supportsSpeechPlayback()) window.speechSynthesis.cancel();
+  setSpeechButtonState(activeSpeechButton, false);
+  activeSpeechButton = null;
+  activeSpeechText = "";
+}
+
+function normalizeSpeechText(text = "") {
+  return String(text)
+    .replace(/\s+/g, " ")
+    .replace(/https?:\/\/\S+/g, "")
+    .trim()
+    .slice(0, 1600);
+}
+
+function speakText(text, button = null) {
+  if (!supportsSpeechPlayback()) {
+    alert("Voice playback is not supported in this browser. Please try Chrome, Edge, or Safari.");
+    return;
+  }
+
+  const cleanText = normalizeSpeechText(text);
+  if (!cleanText) return;
+
+  if (activeSpeechButton === button && activeSpeechText === cleanText && window.speechSynthesis.speaking) {
+    stopSpeechPlayback();
+    return;
+  }
+
+  stopSpeechPlayback();
+
+  const utterance = new SpeechSynthesisUtterance(cleanText);
+  utterance.lang = TTS_LOCALES[currentLanguage || languageSelect?.value] || "en-IN";
+  utterance.rate = 0.95;
+  utterance.pitch = 1;
+  utterance.onend = stopSpeechPlayback;
+  utterance.onerror = stopSpeechPlayback;
+
+  activeSpeechButton = button;
+  activeSpeechText = cleanText;
+  setSpeechButtonState(button, true);
+  window.speechSynthesis.speak(utterance);
+}
+
+function getSearchResultsSpeechText() {
+  const parts = [];
+  const summaryText = aiSummaryBox?.innerText || "";
+  const resultsText = Array.from(resultsBox?.querySelectorAll(".result-item, .news-card-premium, .video-card") || [])
+    .slice(0, 5)
+    .map((el, idx) => `Result ${idx + 1}. ${el.innerText}`)
+    .join(". ");
+
+  if (summaryText) parts.push(summaryText);
+  if (resultsText) parts.push(resultsText);
+  return parts.join(". ");
+}
+
+function renderVoiceButton(label = "Listen", extraClass = "") {
+  return `
+    <button type="button" class="tts-toggle-btn ${extraClass}" aria-pressed="false" title="${label}">
+      <svg class="tts-icon-play" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+        <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+        <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+      </svg>
+      <svg class="tts-icon-stop" width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <rect x="7" y="7" width="10" height="10" rx="2"></rect>
+      </svg>
+    </button>`;
+}
+
+function renderSponsoredAd(ad) {
+  if (!ad) return "";
+  const url = escapeHtml(ad.url || "#");
+  const title = escapeHtml(ad.title || "Sponsored result");
+  const description = escapeHtml(ad.description || "");
+  const advertiser = escapeHtml(ad.advertiser || "Sponsored");
+  const cta = escapeHtml(ad.cta || "Learn more");
+  const category = escapeHtml(ad.category || "recommended");
+
+  return `
+    <div class="sponsored-result" data-ad-id="${escapeHtml(ad.id || "")}">
+      <div class="sponsored-topline">
+        <span class="sponsored-badge">Sponsored</span>
+        <span class="sponsored-advertiser">${advertiser}</span>
+        <span class="sponsored-category">${category}</span>
+      </div>
+      <a href="${url}" target="_blank" rel="noopener noreferrer" class="sponsored-title">${title}</a>
+      <p class="sponsored-description">${description}</p>
+      <a href="${url}" target="_blank" rel="noopener noreferrer" class="sponsored-cta">${cta} →</a>
+    </div>`;
+}
+
+function injectSponsoredAds(htmlItems, ads = []) {
+  if (!ads || ads.length === 0) return htmlItems.join("");
+  const items = [...htmlItems];
+  const firstAd = renderSponsoredAd(ads[0]);
+  const secondAd = renderSponsoredAd(ads[1]);
+
+  if (firstAd) items.splice(Math.min(2, items.length), 0, firstAd);
+  if (secondAd && items.length > 6) items.splice(Math.min(7, items.length), 0, secondAd);
+
+  return items.join("");
+}
+
+document.addEventListener("click", (event) => {
+  const button = event.target.closest(".tts-toggle-btn");
+  if (!button) return;
+  event.preventDefault();
+  event.stopPropagation();
+
+  if (button.classList.contains("tts-all-results")) {
+    speakText(getSearchResultsSpeechText(), button);
+    return;
+  }
+
+  const resultCard = button.closest(".result-item, .news-card-premium, .summary-card, .ai-chat-container");
+  if (resultCard) speakText(resultCard.innerText, button);
+});
+
 // ── Location Services ──
 function requestLocation() {
     if (!navigator.geolocation) {
@@ -1208,6 +1351,7 @@ if (pdfInput) {
 // ═══════════════════════════════════════════
 async function resetToHome(options = {}) {
   const { replaceHistory = false, skipHistory = false } = options;
+  stopSpeechPlayback();
   chatHistory = [];
   activeQuery = "";
   currentFilter = "all";
@@ -1355,6 +1499,7 @@ document.addEventListener("click", (event) => {
 async function search(pageNumber = 1, aiMode = false, options = {}) {
   const { replaceHistory = false, skipHistory = false } = options;
   let query = searchInput ? searchInput.value.trim() : "";
+  stopSpeechPlayback();
   
   // If no query in input, keep the current query for pagination/filter changes.
   if (!query && activeQuery) {
@@ -1519,13 +1664,17 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
             <div class="chat-msg assistant">
                 <div class="chat-msg-icon">✨</div>
                 <div class="chat-msg-text" id="streamingAI"></div>
+                ${renderVoiceButton("Listen to answer", "tts-card-btn")}
             </div>
             ${aiSourcesHtml}
           </div>`;
       } else {
         summaryHtml = `
           <div class="summary-card">
-            <div class="summary-label">✨ Instant AI Answer</div>
+            <div class="summary-label-row">
+              <div class="summary-label">✨ Instant AI Answer</div>
+              ${renderVoiceButton("Listen to answer")}
+            </div>
             <div class="summary-text">${renderMarkdownWithCitations(rawText, aiSources)}</div>
             ${aiSourcesHtml}
           </div>`;
@@ -1713,7 +1862,13 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
               ${isFallback ? `<span class="image-badge">Fallback</span>` : ""}
               <div class="image-title">${tt}</div>
               <div class="image-source">${ts}</div>
-              <a href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer" class="image-open-link">Open →</a>
+              <div class="image-actions-row">
+                <button type="button" class="image-download-link" onclick="event.stopPropagation(); downloadImageUrl(decodeURIComponent('${encodeURIComponent(imageUrl)}'), this)">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  Download
+                </button>
+                <a href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer" class="image-open-link">Open →</a>
+              </div>
             </div>
           </div>`;
       }
@@ -1744,6 +1899,7 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a4 4 0 0 1-4-4V6"/></svg>
                   Read Here
                 </button>
+                ${renderVoiceButton("Listen to news", "tts-card-btn")}
                 <a href="${item.url}" target="_blank" class="news-open-link" onclick="event.stopPropagation()">Open →</a>
               </div>
               <div id="article-inline-${i}" style="display:none;" onclick="event.stopPropagation()"></div>
@@ -1760,7 +1916,10 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
                     <img src="${item.image}" alt="IndiaSearch Team" onerror="this.src='https://via.placeholder.com/150?text=Team+IndiaSearch'">
                 </div>
                 <div class="about-card-content">
+                    <div class="result-title-row">
                     <a href="${escapeHtml(item.url)}" target="_blank" class="result-title" style="font-size: 22px;">${tt}</a>
+                    ${renderVoiceButton("Listen to result", "tts-card-btn")}
+                    </div>
                     <p class="result-snippet" style="margin: 10px 0 20px;">${ts}</p>
                     <div class="about-links">
                         <a href="https://downloader.indiasearch.site" target="_blank" class="about-link-btn">⬇️ Downloader</a>
@@ -1778,13 +1937,17 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
             <div class="result-favicon">🌐</div>
             <span class="result-host">${host}</span>
           </div>
+          <div class="result-title-row">
           <a href="${item.url}" target="_blank" class="result-title">${tt}</a>
+          ${renderVoiceButton("Listen to result", "tts-card-btn")}
+          </div>
           <p class="result-snippet">${ts}</p>
           <a href="${item.url}" target="_blank" class="read-here-btn">${visitT} →</a>
         </div>`;
     });
 
     const htmlItems = await Promise.all(resultPromises);
+    const sponsoredHtml = injectSponsoredAds(htmlItems, data.ad_slots || []);
 
     if (aiMode) {
       resultsBox.innerHTML = "";
@@ -1796,10 +1959,20 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
       resultsBox.innerHTML = `<div class="video-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px;">${htmlItems.join("")}</div>`;
       renderPagination(data.total || 0, pageNumber);
     } else if (currentFilter === "news") {
-      resultsBox.innerHTML = `<div class="news-grid-premium">${htmlItems.join("")}</div>`;
+      resultsBox.innerHTML = `
+        <div class="listen-results-bar">
+          <span>Search results</span>
+          ${renderVoiceButton("Listen to results", "tts-all-results")}
+        </div>
+        <div class="news-grid-premium">${sponsoredHtml}</div>`;
       renderPagination(data.total || 0, pageNumber);
     } else {
-      resultsBox.innerHTML = htmlItems.join("");
+      const listenBar = `
+        <div class="listen-results-bar">
+          <span>Search results</span>
+          ${renderVoiceButton("Listen to results", "tts-all-results")}
+        </div>`;
+      resultsBox.innerHTML = listenBar + sponsoredHtml;
       renderPagination(data.total || 0, pageNumber);
     }
 
@@ -1903,24 +2076,58 @@ window.addEventListener("popstate", async (event) => {
 // ═══════════════════════════════════════════
 // IMAGE MODAL
 // ═══════════════════════════════════════════
+function getImageDownloadUrl(imgUrl) {
+  return `${activeApiBase}/download-image?url=${encodeURIComponent(imgUrl)}`;
+}
+
+function resetDownloadButton(btn) {
+  if (!btn) return;
+  btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Download Image`;
+}
+
+async function downloadImageUrl(imgUrl, btn = null) {
+  if (!imgUrl) return;
+  const originalHtml = btn ? btn.innerHTML : "";
+  try {
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = "Downloading...";
+    }
+
+    const a = document.createElement("a");
+    a.href = getImageDownloadUrl(imgUrl);
+    a.download = "IndiaSearch_Image.jpg";
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    if (btn) {
+      btn.innerHTML = "Downloaded";
+      setTimeout(() => {
+        btn.innerHTML = originalHtml || "Download";
+        btn.disabled = false;
+      }, 1600);
+    }
+  } catch (err) {
+    window.open(imgUrl, "_blank");
+    if (btn) {
+      btn.innerHTML = originalHtml || "Download";
+      btn.disabled = false;
+    }
+  }
+}
+
 function openImageModal(imgUrl) {
   const modal = document.getElementById("imageModal");
   const modalImg = document.getElementById("zoomedImage");
   const btn = document.getElementById("downloadBtn");
   modal.style.display = "flex";
   modalImg.src = imgUrl;
-  btn.onclick = async function (e) {
+  resetDownloadButton(btn);
+  btn.onclick = function (e) {
     e.preventDefault();
-    try {
-      btn.innerHTML = "⏳ Downloading…";
-      const r = await fetch(imgUrl);
-      const blob = await r.blob();
-      const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: "IndiaSearch_Image.jpg", style: "display:none" });
-      document.body.appendChild(a); a.click(); a.remove();
-      URL.revokeObjectURL(a.href);
-      btn.innerHTML = "✅ Downloaded";
-      setTimeout(() => { btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Download Image`; }, 2500);
-    } catch { window.open(imgUrl, "_blank"); }
+    downloadImageUrl(imgUrl, btn);
   };
 }
 
@@ -2243,6 +2450,10 @@ function renderSmartImageGallery(images) {
                 <div class="image-frame" onclick="openImageModal('${cleanUrl}')">
                     <img src="${img.image}" alt="${escapeHtml(img.title)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src='${fallback}'">
                 </div>
+                <button type="button" class="image-download-link image-download-mini" onclick="event.stopPropagation(); downloadImageUrl('${cleanUrl}', this)">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  Download
+                </button>
             </div>
         `;
     }).join("");
@@ -2628,13 +2839,15 @@ function closeAboutPage() {
 
 function checkAdminStatus() {
   const panel = document.getElementById("aboutAdminPanel");
+  const mediaForm = document.getElementById("mediaUploadForm");
   if (!panel) return;
-  const userIdentifier = authState.user ? (authState.user.email || authState.user.phoneNumber) : null;
-  if (userIdentifier === ADMIN_IDENTIFIER) {
-    panel.style.display = "block";
-  } else {
-    panel.style.display = "none";
-  }
+  const userIdentifier = authState.user ? (authState.user.identifier || authState.user.email || authState.user.phoneNumber) : null;
+  panel.style.display = "block";
+  if (mediaForm) mediaForm.style.display = userIdentifier === ADMIN_IDENTIFIER ? "flex" : "none";
+}
+
+function getAboutOwnerToken() {
+  return authState.sessionToken || authState.guestId || localStorage.getItem("guestSession") || "";
 }
 
 async function loadAboutContent() {
@@ -2653,20 +2866,40 @@ function renderAboutPublications(pubs) {
   if (!container) return;
   
   if (!pubs || pubs.length === 0) {
-    container.innerHTML = `<p style="font-size:13px; color:var(--text-muted);">No publications shared yet.</p>`;
+    container.innerHTML = `
+      <div class="pub-empty-state">
+        <strong>No research papers yet</strong>
+        <span>Submitted papers will appear here with topic, duration, abstract, and PDF access.</span>
+      </div>`;
     return;
   }
 
-  container.innerHTML = pubs.map(p => `
+  const ownerToken = getAboutOwnerToken();
+  const currentIdentifier = authState.user ? (authState.user.identifier || authState.user.email || authState.user.phoneNumber || "") : "";
+  const isAdminUser = currentIdentifier === ADMIN_IDENTIFIER;
+
+  container.innerHTML = pubs.map(p => {
+    const canDelete = isAdminUser || (ownerToken && p.owner_session_token === ownerToken) || (currentIdentifier && p.owner_identifier === currentIdentifier);
+    const topic = p.topic ? `<span><b>Topic:</b> ${escapeHtml(p.topic)}</span>` : "";
+    const duration = p.research_duration ? `<span><b>Research time:</b> ${escapeHtml(p.research_duration)}</span>` : "";
+    const unique = p.unique_points ? `<p class="pub-unique"><b>Unique:</b> ${escapeHtml(p.unique_points)}</p>` : "";
+    const author = p.owner_identifier ? `<span><b>Uploaded by:</b> ${escapeHtml(p.owner_identifier)}</span>` : "";
+
+    return `
     <div class="pub-item">
-      <span class="pub-icon">${p.pub_type === 'book' ? '📚' : '📄'}</span>
+      <span class="pub-icon">${p.pub_type === 'book' ? 'B' : 'PDF'}</span>
       <div class="pub-info">
-        <h4>${p.title}</h4>
-        <p>${p.description}</p>
-        <a href="${activeApiBase}${p.file_url}" target="_blank" class="view-link">View ${p.pub_type === 'book' ? 'Book' : 'Paper'} →</a>
+        <div class="pub-title-row">
+          <h4>${escapeHtml(p.title)}</h4>
+          ${canDelete ? `<button class="pub-delete-btn" onclick="deletePublication(${p.id})" title="Delete paper">Delete</button>` : ""}
+        </div>
+        <div class="pub-meta">${topic}${duration}${author}</div>
+        ${unique}
+        <p>${escapeHtml(p.description || "")}</p>
+        <a href="${activeApiBase}${p.file_url}" target="_blank" class="view-link">Open ${p.pub_type === 'book' ? 'Book' : 'Paper'} PDF →</a>
       </div>
     </div>
-  `).join("");
+  `}).join("");
 }
 
 function renderAboutMedia(media) {
@@ -2697,7 +2930,7 @@ async function handleAboutUpload(event, type) {
   event.preventDefault();
   const form = event.target;
   const formData = new FormData(form);
-  formData.append("session_token", authState.sessionToken);
+  formData.append("session_token", getAboutOwnerToken());
 
   const submitBtn = form.querySelector('button[type="submit"]');
   const originalText = submitBtn.textContent;
@@ -2723,5 +2956,20 @@ async function handleAboutUpload(event, type) {
   } finally {
     submitBtn.disabled = false;
     submitBtn.textContent = originalText;
+  }
+}
+
+async function deletePublication(pubId) {
+  if (!confirm("Delete this research paper?")) return;
+  try {
+    const token = encodeURIComponent(getAboutOwnerToken());
+    const res = await fetch(`${activeApiBase}/about-content/publication/${pubId}?session_token=${token}`, {
+      method: "DELETE"
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Delete failed");
+    loadAboutContent();
+  } catch (err) {
+    alert(err.message);
   }
 }

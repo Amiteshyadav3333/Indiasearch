@@ -6,24 +6,31 @@
 # Required env: REDIS_URL (e.g. redis://localhost:6379/0)
 #               Set in .env → loaded by app/config/settings.py
 
-import redis
 import os
 import logging
-from typing import Optional
+from typing import Any, Optional
+
+try:
+    import redis
+except ImportError:
+    redis = None
 
 logger = logging.getLogger(__name__)
 
 class RedisClient:
     """Singleton Redis connection pool wrapper."""
 
-    _client: Optional[redis.Redis] = None
+    _client: Optional[Any] = None
 
     @classmethod
-    def get_client(cls) -> Optional[redis.Redis]:
+    def get_client(cls) -> Optional[Any]:
         """
         Return the shared Redis client (lazy singleton).
         Uses connection pooling for production safety.
         """
+        if redis is None:
+            return None
+
         if cls._client is None:
             # First look for REDIS_URL in env directly, fallback to empty string
             url = os.getenv("REDIS_URL", "redis://localhost:6379/0")

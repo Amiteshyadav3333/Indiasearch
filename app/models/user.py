@@ -6,9 +6,13 @@ import time
 import re
 from typing import Optional
 
-import psycopg2
-import psycopg2.extras
 from urllib.parse import urlparse, unquote
+
+try:
+    import psycopg2
+    import psycopg2.extras
+except ImportError:
+    psycopg2 = None
 
 # ─── PostgreSQL Connection ─────────────────────────────────────────────────────
 # Set DATABASE_URL in your .env file
@@ -26,6 +30,9 @@ def get_conn():
     Handles both postgres:// and postgresql:// URL schemes.
     Handles passwords with special characters (@, #, &, +) correctly.
     """
+    if psycopg2 is None:
+        raise RuntimeError("psycopg2 is not installed. Install requirements.txt to enable PostgreSQL auth.")
+
     if not DATABASE_URL:
         raise RuntimeError("DATABASE_URL is not set.")
     

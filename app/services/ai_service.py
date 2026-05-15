@@ -1,9 +1,14 @@
 import os
 import re
 import groq
-from google import genai
 from dotenv import load_dotenv
 from app.utils import translator
+
+try:
+    from google import genai
+except ImportError:
+    genai = None
+    import google.generativeai as legacy_genai
 
 load_dotenv()
 
@@ -12,10 +17,24 @@ groq_api_key = os.getenv("GROQ_API_KEY") or os.getenv("Grok_api_key")
 groq_client = groq.Groq(api_key=groq_api_key, timeout=12.0) if groq_api_key else None
 
 gemini_api_key = os.getenv("GEMINI_API_KEY")
-if gemini_api_key:
+if gemini_api_key and genai:
     gemini_client = genai.Client(api_key=gemini_api_key)
+elif gemini_api_key:
+    legacy_genai.configure(api_key=gemini_api_key)
+    gemini_client = legacy_genai.GenerativeModel("gemini-2.5-flash")
 else:
     gemini_client = None
+
+
+def _gemini_generate_content(contents):
+    if not gemini_client:
+        return None
+    if genai:
+        return gemini_client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=contents
+        )
+    return gemini_client.generate_content(contents)
 
 def groq_vision_identify(image_b64):
     """Fallback vision identify using Groq"""
@@ -130,10 +149,7 @@ def gemini_chat(query, docs, lang="English", pdf_content=None, intent="general",
     full_prompt += f"CONTEXT:\n{pdf_info}\n{context}\n\nUSER QUERY: {query}"
 
     try:
-        response = gemini_client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=full_prompt
-        )
+        response = _gemini_generate_content(full_prompt)
         return response.text
     except Exception as e:
         print(f"Gemini API Error: {e}")

@@ -3,7 +3,8 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="google-site-verification" content="2KJgbbiBY1L9d-5S-oBDSQomDyQhN-YxYSvEFrLrTC4" />
+  <meta name="google-site-verification" content="2KJgbbiBY1L9d-5S-oBDSQomDyQhN-YxYSvEFrLrTC4" >
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>IndiaSearch – AI Voice Search Engine</title>
 
@@ -77,8 +78,8 @@
     "name": "Amitesh Kumar Yadav",
     "url": "https://indiasearch.site",
     "image": "https://indiasearch.site/favicon-512.png",
-    "jobTitle": "Founder & Researcher",
-    "description": "Amitesh Kumar Yadav is the Founder of IndiaSearch (AI Voice Search Engine), PodLive (Real-time Podcast Platform), and a leading Researcher of Blockchain-based Electronic Voting Systems.",
+    "jobTitle": "Founder & Developer",
+    "description": "Amitesh Kumar Yadav is the Founder of IndiaSearch (AI Voice Search Engine), PodLive (Real-time Podcast Platform), and a leading Developer of Blockchain-based Electronic Voting Systems.",
     "worksFor": {
       "@type": "Organization",
       "name": "IndiaSearch",
@@ -618,32 +619,87 @@
       <button class="close-overlay" onclick="closeAboutPage()">&times;</button>
 
       <div class="about-grid">
-        <!-- Admin Panel (Hidden by default) -->
+        <!-- Research Submission Panel -->
         <div id="aboutAdminPanel" class="about-admin-panel" style="display: none;">
-          <h2>Founder Dashboard</h2>
+          <div class="submission-heading">
+            <span class="section-kicker">Research Repository</span>
+            <h2>Submit a Research Paper</h2>
+            <p>
+              Share original research with the IndiaSearch community. Add context about the topic, research duration,
+              and what makes the work distinct so readers can understand the contribution before opening the PDF.
+            </p>
+          </div>
           <div class="admin-forms">
-            <form id="pubUploadForm" class="admin-form" onsubmit="handleAboutUpload(event, 'publication')">
-              <h3>Upload Research Paper/Book</h3>
-              <input type="text" name="title" placeholder="Title" required>
-              <textarea name="description" placeholder="Description" required></textarea>
-              <select name="pub_type">
-                <option value="paper">Research Paper</option>
-                <option value="book">Book</option>
-              </select>
-              <input type="file" name="file" required>
-              <button type="submit" class="btn-primary">Publish</button>
+            <form id="pubUploadForm" class="admin-form research-upload-form" onsubmit="handleAboutUpload(event, 'publication')">
+              <div class="form-section-title">
+                <h3>Paper Details</h3>
+                <p>Use clear, specific information. This helps readers evaluate your work quickly.</p>
+              </div>
+
+              <label>
+                <span>Research title</span>
+                <input type="text" name="title" placeholder="e.g. Blockchain-based Electronic Voting System" required>
+              </label>
+
+              <label>
+                <span>Research topic</span>
+                <input type="text" name="topic" placeholder="e.g. Blockchain, voting security, AI search, agriculture tech" required>
+              </label>
+
+              <div class="form-two-col">
+                <label>
+                  <span>Research duration</span>
+                  <input type="text" name="research_duration" placeholder="e.g. 6 months, 1 year" required>
+                </label>
+
+                <label>
+                  <span>Submission type</span>
+                  <select name="pub_type">
+                    <option value="paper">Research Paper</option>
+                    <option value="book">Book</option>
+                  </select>
+                </label>
+              </div>
+
+              <label>
+                <span>What is unique?</span>
+                <textarea name="unique_points" placeholder="Mention the core innovation, method, dataset, implementation, or finding that makes this work different." required></textarea>
+              </label>
+
+              <label>
+                <span>Short abstract</span>
+                <textarea name="description" placeholder="Write a concise summary of the problem, approach, and result." required></textarea>
+              </label>
+
+              <label class="file-drop">
+                <span>Upload PDF</span>
+                <input type="file" name="file" accept="application/pdf,.pdf" required>
+                <small>Only PDF files are accepted.</small>
+              </label>
+
+              <button type="submit" class="btn-primary">Submit Research Paper</button>
             </form>
 
-            <form id="mediaUploadForm" class="admin-form" onsubmit="handleAboutUpload(event, 'media')">
-              <h3>Add Video to Gallery</h3>
-              <input type="text" name="title" placeholder="Video Title" required>
-              <input type="url" name="video_url" placeholder="YouTube/Video URL" required>
-              <label>Thumbnail (Optional):</label>
-              <input type="file" name="thumbnail">
+            <form id="mediaUploadForm" class="admin-form admin-only-form" onsubmit="handleAboutUpload(event, 'media')">
+              <div class="form-section-title">
+                <h3>Founder Media</h3>
+                <p>Add videos or talks related to IndiaSearch, research work, or founder updates.</p>
+              </div>
+              <label>
+                <span>Video title</span>
+                <input type="text" name="title" placeholder="Video title" required>
+              </label>
+              <label>
+                <span>Video URL</span>
+                <input type="url" name="video_url" placeholder="YouTube or video URL" required>
+              </label>
+              <label>
+                <span>Thumbnail optional</span>
+                <input type="file" name="thumbnail">
+              </label>
               <button type="submit" class="btn-primary">Add Video</button>
             </form>
           </div>
-          <hr class="admin-divider">
         </div>
 
         <!-- Left: Founder Info -->
@@ -653,22 +709,19 @@
               <img src="about-indiasearch.jpg" alt="Amitesh Kumar Yadav" class="profile-img">
             </div>
             <h1>Amitesh Kumar Yadav</h1>
-            <p class="founder-badge">Founder & Lead Researcher</p>
+            <p class="founder-badge">Founder & Developer</p>
           </div>
 
           <div class="about-bio">
             <p>
-              Amitesh Kumar Yadav is a visionary technologist, researcher, and entrepreneur dedicated to bridging the
-              digital divide in India.
-              As the founder of <strong>IndiaSearch</strong> and <strong>PodLive</strong>, he has pioneered AI-driven
-              platforms that prioritize
-              accessibility and regional language support.
+              Amitesh Kumar Yadav is a technologist, Developer, and product builder focused on creating practical
+              digital tools for India. His work combines artificial intelligence, regional language access, and
+              user-first software design.
             </p>
             <p>
-              Beyond entrepreneurship, Amitesh is a leading researcher in <strong>Blockchain-based Electronic Voting
-                Systems</strong>,
-              focusing on creating secure, transparent, and decentralized governance tools for the modern era.
-              His work at the intersection of AI and Blockchain aims to empower the next billion users in Bharat.
+              As the founder of <strong>IndiaSearch</strong>, he is building a search experience designed for Bharat:
+              fast, multilingual, voice-friendly, and useful for students, researchers, job seekers, and local
+              businesses.
             </p>
           </div>
 
@@ -693,25 +746,20 @@
             <h2>About IndiaSearch</h2>
             <div class="long-desc">
               <p>
-                IndiaSearch is Bharat's first intelligent, AI-powered multi-lingual search engine, designed specifically
-                to serve the diverse needs of the Indian population.
-                Unlike traditional search engines, IndiaSearch combines advanced retrieval-augmented generation (RAG)
-                with local language understanding
-                to provide precise, summarized answers in over 22 regional languages. Our mission is to make the vast
-                knowledge of the internet accessible
-                to every Indian, regardless of their language or technical literacy.
+                IndiaSearch is an AI-powered multilingual search platform built for Indian users. It combines web
+                search, AI answers, voice interaction, image discovery, news, weather, finance, jobs, and research
+                discovery into one accessible experience.
               </p>
               <p>
-                The platform features a "Voice-First" architecture, allowing users to interact naturally in their mother
-                tongue.
-                Whether it's farmers checking crop prices in Marathi, students researching history in Bengali, or
-                entrepreneurs analyzing market trends in Hindi,
-                IndiaSearch delivers high-quality, verified information. By integrating local data indexes with global
-                web intelligence, we provide a search experience
-                that is culturally relevant, fast, and secure. We believe that language should never be a barrier to
-                information, and IndiaSearch is the bridge
-                connecting 1.4 billion people to the digital future.
+                The goal is simple: make reliable information easier to find in the language and format people prefer.
+                IndiaSearch is especially focused on regional access, local businesses, education, research sharing,
+                and job discovery.
               </p>
+            </div>
+            <div class="about-stat-grid">
+              <div><strong>22+</strong><span>Indian language focus</span></div>
+              <div><strong>AI</strong><span>Answer and research support</span></div>
+              <div><strong>Voice</strong><span>Search and listen controls</span></div>
             </div>
           </div>
 
@@ -728,8 +776,11 @@
           <!-- ── NEW: RESEARCH & PUBLICATIONS ── -->
           <div class="about-extra-section">
             <div class="section-header">
-              <h3>Research & Publications</h3>
-              <button class="btn-share-mini" onclick="alert('Founder Portal: Upload feature coming soon')">+ Share
+              <div>
+                <span class="section-kicker">Community Knowledge</span>
+                <h3>Research & Publications</h3>
+              </div>
+              <button class="btn-share-mini" onclick="document.getElementById('pubUploadForm')?.scrollIntoView({behavior:'smooth', block:'center'})">+ Share
                 Paper/Book</button>
             </div>
             <div class="publication-list">
@@ -737,7 +788,7 @@
                 <span class="pub-icon">📄</span>
                 <div class="pub-info">
                   <h4>Blockchain-based Electronic Voting Systems</h4>
-                  <p>A comprehensive research paper on secure decentralized governance.</p>
+                  <p>A comprehensive Researcher paper on secure decentralized governance.</p>
                 </div>
               </div>
             </div>
@@ -746,10 +797,9 @@
           <!-- ── NEW: VIDEO & MEDIA GALLERY ── -->
           <div class="about-extra-section">
             <div class="section-header">
-              <h3>Media Gallery</h3>
-              <button class="btn-share-mini" onclick="alert('Founder Portal: Video upload feature coming soon')">+ Add
-                Video</button>
-            </div>
+              <div>
+                <span class="section-kicker">Updates</span>
+                <h3>Media Gallery</h3>
             <div class="media-grid-mini">
               <div class="media-placeholder">
                 <span>Gallery Items</span>

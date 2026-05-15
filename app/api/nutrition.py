@@ -1,20 +1,46 @@
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from google import genai
 import base64
 import json
 import re
 import os
 
+try:
+    from google import genai
+except ImportError:
+    genai = None
+    import google.generativeai as legacy_genai
+
 router = APIRouter(prefix="/api/nutrition", tags=["nutrition"])
 
 # Gemini client — uses GEMINI_API_KEY from env
 gemini_key = os.getenv("GEMINI_API_KEY")
-if gemini_key:
+if gemini_key and genai:
     gemini_client = genai.Client(api_key=gemini_key)
+elif gemini_key:
+    legacy_genai.configure(api_key=gemini_key)
+    gemini_client = legacy_genai.GenerativeModel("gemini-2.5-flash")
 else:
     gemini_client = None
+
+
+def generate_gemini_content(contents):
+    if not gemini_client:
+        return None
+    if genai:
+        return gemini_client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=contents
+        )
+    return gemini_client.generate_content(contents)
+
+
+def make_image_part(image_base64: str, media_type: str):
+    image_bytes = base64.b64decode(image_base64)
+    if genai:
+        return genai.types.Part.from_bytes(data=image_bytes, mime_type=media_type)
+    return {"mime_type": media_type, "data": image_bytes}
 
 SYSTEM_PROMPT = """You are a nutrition expert AI for IndiaSearch, India's search engine.
 Analyze the food/fruit/dish and return ONLY a valid JSON object. No markdown, no explanation, just pure JSON.
@@ -82,10 +108,7 @@ async def analyze_by_text(body: TextQuery):
         raise HTTPException(status_code=400, detail="Query empty hai")
 
     try:
-        response = gemini_client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=f"{SYSTEM_PROMPT}\n\nFood item: \"{body.query}\". Per 100g nutrition details do."
-        )
+        response = generate_gemini_content(f"{SYSTEM_PROMPT}\n\nFood item: \"{body.query}\". Per 100g nutrition details do.")
         text = response.text
         result = parse_nutrition_response(text)
         result["intent"] = "nutrition"
@@ -107,13 +130,10 @@ async def analyze_by_image(body: ImageQuery):
         raise HTTPException(status_code=400, detail="Image data missing hai")
 
     try:
-        response = gemini_client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=[
-                genai.types.Part.from_bytes(data=base64.b64decode(body.image_base64), mime_type=body.media_type),
-                f"{SYSTEM_PROMPT}\n\nIs image mein kya food hai? Uski nutrition details do."
-            ]
-        )
+        response = generate_gemini_content([
+            make_image_part(body.image_base64, body.media_type),
+            f"{SYSTEM_PROMPT}\n\nIs image mein kya food hai? Uski nutrition details do."
+        ])
         text = response.text
         result = parse_nutrition_response(text)
         result["intent"] = "nutrition"

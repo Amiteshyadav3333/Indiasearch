@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 import firebase_admin
 from firebase_admin import auth, credentials
 from fastapi import FastAPI, Request, UploadFile, File, Form
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -300,6 +300,45 @@ async def read_article(url: str):
         logger.warning(f"[ReadArticle] Failed to read {url}: {e}")
         return {"error": "Blocked"}
 
+@app.get("/download-image")
+async def download_image(url: str):
+    if not url.startswith(("http://", "https://", "/")):
+        return JSONResponse({"error": "Invalid image URL"}, 400)
+
+    try:
+        if url.startswith("/"):
+            local_path = url.lstrip("/")
+            if not os.path.exists(local_path):
+                return JSONResponse({"error": "Image not found"}, 404)
+            filename = os.path.basename(local_path) or "IndiaSearch_Image.jpg"
+            return FileResponse(local_path, filename=filename, media_type="application/octet-stream")
+
+        headers = {
+            "User-Agent": "Mozilla/5.0 (IndiaSearch Image Downloader)",
+            "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        }
+        upstream = requests.get(url, headers=headers, stream=True, timeout=15)
+        upstream.raise_for_status()
+
+        content_type = upstream.headers.get("content-type", "image/jpeg").split(";")[0]
+        ext = {
+            "image/png": "png",
+            "image/webp": "webp",
+            "image/gif": "gif",
+            "image/svg+xml": "svg",
+            "image/jpeg": "jpg",
+        }.get(content_type, "jpg")
+        filename = f"IndiaSearch_Image_{int(time.time())}.{ext}"
+
+        return StreamingResponse(
+            upstream.iter_content(chunk_size=8192),
+            media_type=content_type,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        )
+    except Exception as e:
+        logger.warning(f"[ImageDownload] Failed for {url}: {e}")
+        return JSONResponse({"error": "Image download failed"}, 500)
+
 # ── About Content Management (Admin Only) ──
 @app.get("/about-content")
 async def get_about_data():
@@ -307,34 +346,64 @@ async def get_about_data():
 
 def is_admin(session_token: str | None):
     if not session_token: return False
-    user = auth_store.get_user_by_session(session_token)
-    if not user: return False
-    # The founder's email/identifier should be set in environment
-    admin_id = os.getenv("ADMIN_IDENTIFIER", "amitesh@indiasearch.site")
-    return user["identifier"] == admin_id
+    try:
+        user = auth_store.get_user_by_session(session_token)
+        if not user: return False
+        # The founder's email/identifier should be set in environment
+        admin_id = os.getenv("ADMIN_IDENTIFIER", "amitesh@indiasearch.site")
+        return user["identifier"] == admin_id
+    except Exception:
+        return False
+
+def get_session_user(session_token: str | None):
+    valid_session = normalize_session_token(session_token)
+    if not valid_session:
+        return None
+    try:
+        return auth_store.get_user_by_session(valid_session)
+    except Exception:
+        return None
 
 @app.post("/about-content/publication")
 async def upload_publication(
     title: str = Form(...),
     description: str = Form(...),
+    topic: str = Form(...),
+    research_duration: str = Form(...),
+    unique_points: str = Form(...),
     pub_type: str = Form("paper"),
     file: UploadFile = File(...),
     session_token: str = Form(...)
 ):
-    if not is_admin(session_token):
-        return JSONResponse({"error": "Admin access required"}, 403)
+    if not session_token or session_token.strip().lower() in {"undefined", "null", "none", ""}:
+        return JSONResponse({"error": "Session missing. Please refresh and try again."}, 400)
     
     try:
         # Save file locally
-        file_ext = file.filename.split(".")[-1]
+        file_ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+        if file_ext != "pdf":
+            return JSONResponse({"error": "Only PDF research papers are allowed."}, 400)
+
         safe_name = f"pub_{int(time.time())}.{file_ext}"
         save_path = os.path.join("uploads", "about", safe_name)
         with open(save_path, "wb") as f:
             f.write(await file.read())
         
         file_url = f"/uploads/about/{safe_name}"
-        about_content.add_publication(title, description, file_url, pub_type)
-        return {"message": "Publication added successfully", "url": file_url}
+        user = get_session_user(session_token)
+        owner_identifier = user["identifier"] if user else ""
+        about_content.add_publication(
+            title=title,
+            description=description,
+            file_url=file_url,
+            pub_type=pub_type,
+            topic=topic,
+            research_duration=research_duration,
+            unique_points=unique_points,
+            owner_session_token=session_token,
+            owner_identifier=owner_identifier
+        )
+        return {"message": "Research paper uploaded successfully", "url": file_url}
     except Exception as e:
         return JSONResponse({"error": str(e)}, 500)
 
@@ -365,9 +434,24 @@ async def upload_media(
 
 @app.delete("/about-content/publication/{pub_id}")
 async def delete_pub(pub_id: int, session_token: str):
-    if not is_admin(session_token):
-        return JSONResponse({"error": "Admin access required"}, 403)
+    publication = about_content.get_publication(pub_id)
+    if not publication:
+        return JSONResponse({"error": "Publication not found"}, 404)
+
+    user = get_session_user(session_token)
+    owns_publication = bool(session_token and publication.get("owner_session_token") == session_token)
+    if user and publication.get("owner_identifier"):
+        owns_publication = owns_publication or publication.get("owner_identifier") == user.get("identifier")
+    if not owns_publication and not is_admin(session_token):
+        return JSONResponse({"error": "You can delete only your own research paper"}, 403)
+
     about_content.delete_publication(pub_id)
+    file_url = publication.get("file_url") or ""
+    if file_url.startswith("/uploads/about/"):
+        try:
+            os.remove(file_url.lstrip("/"))
+        except OSError:
+            pass
     return {"message": "Deleted"}
 
 @app.delete("/about-content/media/{media_id}")

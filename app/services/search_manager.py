@@ -28,7 +28,8 @@ from app.services import (
     finance_service,
     ai_service,
     news_service,
-    wiki_service
+    wiki_service,
+    ad_service
 )
 from app.utils import translator
 
@@ -106,6 +107,16 @@ def extract_youtube_id(url: str) -> str:
         if match:
             return match.group(1)
     return ""
+
+def clean_image_query(query: str) -> str:
+    cleaned = re.sub(
+        r"\b(picture|pictures|image|images|photo|photos|pic|pics|wallpaper|wallpapers|photograph|img|show me|dikhao)\b",
+        " ",
+        query,
+        flags=re.IGNORECASE
+    )
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned or query
 
 async def resilient_web_results(query: str, max_results: int = MAX_WEB_RESULTS) -> list:
     tasks = [
@@ -312,6 +323,7 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
         en_query_for_web = en_query
 
     logger.info(f"[Brain] Query: {query!r} | Intent: {intent} | Detected Lang: {detected_lang} | Output Lang: {output_language} | Loc: {lat},{lon}")
+    image_query_for_web = clean_image_query(en_query_for_web)
 
     # ── Step 1.5: Location Enhancement ────────────────────
     if is_local_query and lat and lon:
@@ -354,6 +366,9 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
     special_data = None
 
     # ── Level 1: Intent-Specific Data Fetch ───────────────
+    tasks = []
+    image_tasks = []
+
     if intent == "weather":
         special_data = await weather_service.fetch_weather(en_query)
         sources_used.append("weather_api")
@@ -363,24 +378,16 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
     elif intent == "finance":
         special_data = await finance_service.fetch_stock(en_query)
         sources_used.append("finance_api")
-    elif intent == "images" and filter == "all":
-        # Smart Image Gallery for "All" tab when user asks for pictures
-        logger.info("[Brain] Image intent detected in 'All' filter. Fetching top images.")
-        tasks.append(asyncio.create_task(api_client.search_images(en_query_for_web, max_results=8)))
-        tasks.append(asyncio.create_task(duckduckgo_client.search_images(en_query_for_web, max_results=8)))
 
     # ── Level 2: Parallel Search (Local + Web) ────────────
-    tasks = []
-    image_tasks = []
-    
     dedicated_api_filter = filter in ["weather", "score", "stock", "finance"]
 
     if intent == "images" and filter == "all":
         # Smart Image Gallery for "All" tab when user asks for pictures
         logger.info("[Brain] Image intent detected in 'All' filter. Fetching top images.")
-        image_tasks.append(asyncio.create_task(api_client.search_images(en_query_for_web, max_results=8)))
-        image_tasks.append(asyncio.create_task(duckduckgo_client.search_images(en_query_for_web, max_results=8)))
-        image_tasks.append(asyncio.create_task(yahoo_client.search_images(en_query_for_web, max_results=8)))
+        image_tasks.append(asyncio.create_task(api_client.search_images(image_query_for_web, max_results=8)))
+        image_tasks.append(asyncio.create_task(duckduckgo_client.search_images(image_query_for_web, max_results=8)))
+        image_tasks.append(asyncio.create_task(yahoo_client.search_images(image_query_for_web, max_results=8)))
 
     if filter == "news":
         logger.info("[Brain] News filter active. Using news API plus web fallback.")
@@ -389,9 +396,9 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
         logger.info(f"[Brain] Dedicated API filter active: {filter}. Skipping generic web search.")
     elif filter == "images":
         # Multi-source image search so the tab still works if a paid API/key is unavailable.
-        tasks.append(asyncio.create_task(api_client.search_images(en_query_for_web, max_results=MAX_WEB_RESULTS)))
-        tasks.append(asyncio.create_task(duckduckgo_client.search_images(en_query_for_web, max_results=MAX_WEB_RESULTS)))
-        tasks.append(asyncio.create_task(yahoo_client.search_images(en_query_for_web, max_results=MAX_WEB_RESULTS)))
+        tasks.append(asyncio.create_task(api_client.search_images(image_query_for_web, max_results=MAX_WEB_RESULTS)))
+        tasks.append(asyncio.create_task(duckduckgo_client.search_images(image_query_for_web, max_results=MAX_WEB_RESULTS)))
+        tasks.append(asyncio.create_task(yahoo_client.search_images(image_query_for_web, max_results=MAX_WEB_RESULTS)))
     elif filter == "videos":
         # Multi-source video search with thumbnail normalization.
         tasks.append(asyncio.create_task(api_client.search_videos(en_query_for_web, max_results=MAX_WEB_RESULTS)))
@@ -566,6 +573,7 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
     response = {
         "results": paginated,
         "intent": intent,
+        "ad_slots": ad_service.build_ad_slots(query=query, intent=intent, search_filter=filter),
         "special_data": special_data,
         "top_images": top_images,
         "knowledge_panel": knowledge_panel,
