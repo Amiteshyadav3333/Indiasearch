@@ -4453,6 +4453,11 @@ body {
     justify-content: center;
   }
 }
+.about-section,
+.about-overlay,
+.about-nav-link {
+  display: none !important;
+}
 
 /* ── AUTO THEME SUPPORT ── */
 @media (prefers-color-scheme: dark) {
