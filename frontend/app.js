@@ -2425,8 +2425,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     writeBrowserSearchState({ query: "" }, true);
   }
 });
-// Final Initialization
-updateUserUI();
+
+
 
 // ===== CALORY SCANNER (IndiaSearch AI Powered) =====
 
