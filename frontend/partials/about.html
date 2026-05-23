@@ -1,0 +1,198 @@
+<!-- ═══ ABOUT FULL-SCREEN PAGE ═══ -->
+  <div id="aboutOverlay" class="about-overlay" style="display: none;">
+    <div class="about-content">
+      <button class="close-overlay" onclick="closeAboutPage()">&times;</button>
+
+      <div class="about-grid">
+        <!-- Research Submission Panel -->
+        <div id="aboutAdminPanel" class="about-admin-panel" style="display: none;">
+          <div class="submission-heading">
+            <span class="section-kicker">Research Repository</span>
+            <h2>Submit a Research Paper</h2>
+            <p>
+              Share original research with the IndiaSearch community. Add context about the topic, research duration,
+              and what makes the work distinct so readers can understand the contribution before opening the PDF.
+            </p>
+          </div>
+          <div class="admin-forms">
+            <form id="pubUploadForm" class="admin-form research-upload-form" onsubmit="handleAboutUpload(event, 'publication')">
+              <div class="form-section-title">
+                <h3>Paper Details</h3>
+                <p>Use clear, specific information. This helps readers evaluate your work quickly.</p>
+              </div>
+
+              <label>
+                <span>Research title</span>
+                <input type="text" name="title" placeholder="e.g. Blockchain-based Electronic Voting System" required>
+              </label>
+
+              <label>
+                <span>Research topic</span>
+                <input type="text" name="topic" placeholder="e.g. Blockchain, voting security, AI search, agriculture tech" required>
+              </label>
+
+              <div class="form-two-col">
+                <label>
+                  <span>Research duration</span>
+                  <input type="text" name="research_duration" placeholder="e.g. 6 months, 1 year" required>
+                </label>
+
+                <label>
+                  <span>Submission type</span>
+                  <select name="pub_type">
+                    <option value="paper">Research Paper</option>
+                    <option value="book">Book</option>
+                  </select>
+                </label>
+              </div>
+
+              <label>
+                <span>What is unique?</span>
+                <textarea name="unique_points" placeholder="Mention the core innovation, method, dataset, implementation, or finding that makes this work different." required></textarea>
+              </label>
+
+              <label>
+                <span>Short abstract</span>
+                <textarea name="description" placeholder="Write a concise summary of the problem, approach, and result." required></textarea>
+              </label>
+
+              <label class="file-drop">
+                <span>Upload PDF</span>
+                <input type="file" name="file" accept="application/pdf,.pdf" required>
+                <small>Only PDF files are accepted.</small>
+              </label>
+
+              <button type="submit" class="btn-primary">Submit Research Paper</button>
+            </form>
+
+            <form id="mediaUploadForm" class="admin-form admin-only-form" onsubmit="handleAboutUpload(event, 'media')">
+              <div class="form-section-title">
+                <h3>Founder Media</h3>
+                <p>Add videos or talks related to IndiaSearch, research work, or founder updates.</p>
+              </div>
+              <label>
+                <span>Video title</span>
+                <input type="text" name="title" placeholder="Video title" required>
+              </label>
+              <label>
+                <span>Video URL</span>
+                <input type="url" name="video_url" placeholder="YouTube or video URL" required>
+              </label>
+              <label>
+                <span>Thumbnail optional</span>
+                <input type="file" name="thumbnail">
+              </label>
+              <button type="submit" class="btn-primary">Add Video</button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Left: Founder Info -->
+            <div class="about-left"> 
+            <div class="profile-header"> 
+            <div class="profile-img-wrap">
+              <img src="about-indiasearch.jpg" alt="Amitesh Kumar Yadav" class="profile-img">
+            </div>
+            <h1>Amitesh Kumar Yadav</h1>
+            <p class="founder-badge">Founder & Developer</p>
+          </div>
+
+          <div class="about-bio">
+            <p>
+              Amitesh Kumar Yadav is a Founder, Developer, and product builder focused on creating practical
+              digital tools for India. His work combines artificial intelligence, regional language access, and
+              user-first software design.
+            </p>
+            <p>
+              As the founder of <strong>IndiaSearch</strong>, he is building a search experience designed for Bharat:
+              fast, multilingual, voice-friendly, and useful for students, researchers, job seekers, and local
+              businesses.
+            </p>
+          </div>
+
+          <div class="social-links-pro">
+            <a href="https://www.linkedin.com/in/amitesh-kumar-yadav-b55b10293" target="_blank"
+              class="pro-link linkedin">LinkedIn Profile</a>
+            <a href="https://www.instagram.com/in/iamamiteshky/" target="_blank" class="pro-link instagram">Instagram
+              Profile</a>
+            <a href="https://x.com/Amiteshyad7898" target="_blank" class="pro-link twitter">Twitter / X</a>
+            <a href="https://indiasearch.site" target="_blank" class="pro-link website">Main Portfolio</a>
+            <hr class="link-divider">
+            <span class="link-label">My Working Projects:</span>
+            <a href="https://downloader.indiasearch.site" target="_blank" class="pro-link project">Video Downloader
+              Engine</a>
+            <a href="https://chat.indiasearch.site" target="_blank" class="pro-link project">IndiaSearch AI Chat</a>
+          </div>
+        </div>
+
+        <!-- Right: IndiaSearch Details & Video -->
+        <div class="about-right">
+          <div class="details-section">
+            <h2>About IndiaSearch</h2>
+            <div class="long-desc">
+              <p>
+                IndiaSearch is an AI-powered multilingual search platform built for Indian users. It combines web
+                search, AI answers, voice interaction, image discovery, news, weather, finance, jobs, and research
+                discovery into one accessible experience.
+              </p>
+              <p>
+                The goal is simple: make reliable information easier to find in the language and format people prefer.
+                IndiaSearch is especially focused on regional access, local businesses, education, research sharing,
+                and job discovery.
+              </p>
+            </div>
+            <div class="about-stat-grid">
+              <div><strong>22+</strong><span>Indian language focus</span></div>
+              <div><strong>AI</strong><span>Answer and research support</span></div>
+              <div><strong>Voice</strong><span>Search and listen controls</span></div>
+            </div>
+          </div>
+
+          <div class="video-section">
+            <h3>Founder's Message</h3>
+            <div class="video-container">
+              <iframe data-src="https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ" title="Founder Message" frameborder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowfullscreen>
+              </iframe>
+            </div>
+          </div>
+
+          <!-- ── NEW: RESEARCH & PUBLICATIONS ── -->
+          <div class="about-extra-section">
+            <div class="section-header">
+              <div>
+                <span class="section-kicker">Community Knowledge</span>
+                <h3>Research & Publications</h3>
+              </div>
+              <button class="btn-share-mini" onclick="document.getElementById('pubUploadForm')?.scrollIntoView({behavior:'smooth', block:'center'})">+ Share
+                Paper/Book</button>
+            </div>
+            <div class="publication-list">
+              <div class="pub-item">
+                <span class="pub-icon">📄</span>
+                <div class="pub-info">
+                  <p>A comprehensive Researcher paper on secure decentralized governance.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── NEW: VIDEO & MEDIA GALLERY ── -->
+          <div class="about-extra-section">
+            <div class="section-header">
+              <div>
+                <span class="section-kicker">Updates</span>
+                <h3>Media Gallery</h3>
+              </div>
+            </div>
+            <div class="media-grid-mini">
+              <div class="media-placeholder">
+                <span>Gallery Items</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>

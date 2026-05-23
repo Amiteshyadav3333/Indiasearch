@@ -10,21 +10,6 @@ const PROD_API_BASES = [
 ];
 let activeApiBase = isLocalHost ? LOCAL_API_BASE : PROD_API_BASES[0];
 
-// ── Firebase Config (Update with your own keys) ──
-const firebaseConfig = {
-  apiKey: "AIzaSyAz-DUMMY-KEY-REPLACE-ME",
-  authDomain: "indiasearch-975e1.firebaseapp.com",
-  projectId: "indiasearch-975e1",
-  storageBucket: "indiasearch-975e1.appspot.com",
-  messagingSenderId: "367253459142",
-  appId: "1:367253459142:web:7f6f1a8e1a1e1a1e1a1e1a"
-};
-
-if (!firebase.apps.length) {
-  firebase.initializeApp(firebaseConfig);
-}
-const auth = firebase.auth();
-
 // ── DOM Refs ──
 const searchInput = document.getElementById("searchInput");
 const resultsBox = document.getElementById("results");
@@ -162,11 +147,8 @@ let activeSpeechButton = null;
 let activeSpeechText = "";
 let attachedScan = null;
 
-// Combined Identity & Session Management
-let authState = {
-  user: null,
-  isGuest: true,
-  sessionToken: localStorage.getItem("sessionToken") || "",
+// Guest-only session state for search context and local preferences.
+let appState = {
   guestId: localStorage.getItem("guestSession") || `guest_${Math.random().toString(36).substr(2, 9)}`,
   location: JSON.parse(localStorage.getItem("userLocation")) || null,
   locationChoiceMade: localStorage.getItem("locationChoiceMade") === "true"
@@ -176,7 +158,7 @@ let activeQuery = ""; // Persistent query for pagination and filter switches
 let restoringBrowserState = false;
 
 if (!localStorage.getItem("guestSession")) {
-  localStorage.setItem("guestSession", authState.guestId);
+  localStorage.setItem("guestSession", appState.guestId);
 }
 
 const LANGUAGE_STORAGE_KEY = "indiasearchLanguage";
@@ -232,7 +214,29 @@ const UI_TRANSLATIONS = {
     filters: { advanced: "एडवांस्ड", nutrition: "न्यूट्रिशन", all: "सब", news: "समाचार", images: "इमेज", videos: "वीडियो", weather: "मौसम", score: "लाइव स्कोर", stock: "स्टॉक", sarkari: "सरकारी", jobs: "नौकरियां", mandi: "मंडी", irctc: "IRCTC", aadhaar: "आधार/PAN", jugaad: "जुगाड़", courts: "कोर्ट्स" }
   }
 };
-let currentLanguage = localStorage.getItem(LANGUAGE_STORAGE_KEY) || "en";
+// ── Auto-detect browser/system language ──
+function detectBrowserLanguage() {
+  // navigator.language returns e.g. "hi-IN", "en-US", "bn-BD", "ta"
+  const browserLang = (navigator.language || navigator.userLanguage || "en").toLowerCase();
+  // Extract the primary language code (before the dash)
+  const primary = browserLang.split("-")[0];
+  
+  // Map of browser language codes to our supported codes
+  const BROWSER_TO_APP_LANG = {
+    en: "en", hi: "hi", as: "as", bn: "bn", gu: "gu", kn: "kn",
+    ks: "ks", ml: "ml", mr: "mr", ne: "ne", or: "or", pa: "pa",
+    sa: "sa", sd: "sd", ta: "ta", te: "te", ur: "ur",
+    bho: "bho", mai: "mai", sat: "sat", mni: "mni", brx: "brx",
+    doi: "doi", gom: "gom",
+    // Common aliases
+    bh: "bho",  // Bhojpuri
+    kok: "gom"  // Konkani
+  };
+  
+  return BROWSER_TO_APP_LANG[primary] || BROWSER_TO_APP_LANG[browserLang] || "en";
+}
+
+let currentLanguage = localStorage.getItem(LANGUAGE_STORAGE_KEY) || detectBrowserLanguage();
 
 function getSearchStateFromUrl() {
   const params = new URLSearchParams(window.location.search);
@@ -277,139 +281,6 @@ function writeBrowserSearchState({ query, page = 1, filter = "all", aiMode = fal
   history[replace ? "replaceState" : "pushState"](state, "", url);
 }
 
-// ── Auth Logic ──
-const authModal = document.getElementById("authModal");
-const userDropdown = document.getElementById("userDropdown");
-let currentAuthMode = "signin"; 
-let currentAuthMethod = "email"; 
-let confirmationResult = null; 
-
-function toggleUserMenu() {
-  const dropdown = document.getElementById("userDropdown");
-  if (!dropdown) return;
-  const isHidden = dropdown.style.display !== "flex";
-  
-  if (isHidden) {
-    updateUserUI(); // Fill content first
-    dropdown.style.display = "flex";
-  } else {
-    dropdown.style.display = "none";
-  }
-}
-
-function openAuthModal(mode = "signin") {
-  currentAuthMode = mode;
-  if (authModal) {
-    authModal.style.display = "flex";
-    document.getElementById("authTitle").innerText = mode === "signin" ? "Sign In" : "Sign Up";
-    document.getElementById("authSwitchText").innerHTML = mode === "signin" 
-      ? `Don't have an account? <a href="#" onclick="toggleAuthMode()">Sign Up</a>`
-      : `Already have an account? <a href="#" onclick="toggleAuthMode()">Sign In</a>`;
-  }
-}
-
-function closeAuthModal() {
-  if (authModal) authModal.style.display = "none";
-}
-
-function toggleAuthMode() {
-  openAuthModal(currentAuthMode === "signin" ? "signup" : "signin");
-}
-
-function setAuthMethod(method) {
-  currentAuthMethod = method;
-  document.getElementById("emailTab").classList.toggle("active", method === "email");
-  document.getElementById("phoneTab").classList.toggle("active", method === "phone");
-  document.getElementById("emailForm").style.display = method === "email" ? "flex" : "none";
-  document.getElementById("phoneForm").style.display = method === "phone" ? "flex" : "none";
-}
-
-async function handleAuthSubmit(e) {
-  e.preventDefault();
-  const email = document.getElementById("authEmail").value;
-  const password = document.getElementById("authPassword").value;
-  try {
-    if (currentAuthMode === "signin") {
-      await auth.signInWithEmailAndPassword(email, password);
-    } else {
-      await auth.createUserWithEmailAndPassword(email, password);
-    }
-    closeAuthModal();
-  } catch (err) {
-    alert(err.message);
-  }
-}
-
-window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', { 'size': 'invisible' });
-
-async function handlePhoneSubmit(e) {
-  e.preventDefault();
-  const phone = "+91" + document.getElementById("authPhone").value;
-  const otpGroup = document.getElementById("otpGroup");
-  const submitBtn = document.getElementById("phoneSubmitBtn");
-  if (!confirmationResult) {
-    try {
-      confirmationResult = await auth.signInWithPhoneNumber(phone, window.recaptchaVerifier);
-      otpGroup.style.display = "block";
-      submitBtn.innerText = "Verify OTP";
-    } catch (err) {
-      alert(err.message);
-    }
-  } else {
-    const code = document.getElementById("authOtp").value;
-    try {
-      await confirmationResult.confirm(code);
-      closeAuthModal();
-    } catch (err) {
-      alert("Invalid OTP");
-    }
-  }
-}
-
-function handleLogout() {
-  auth.signOut();
-  const dropdown = document.getElementById("userDropdown");
-  if (dropdown) dropdown.style.display = "none";
-}
-
-function updateUserUI() {
-  const dropdown = document.getElementById("userDropdown");
-  if (!dropdown) return;
-
-  const isDark = document.documentElement.getAttribute("data-theme") === "dark";
-  const modeText = isDark ? "☀️ Light Mode" : "🌙 Dark Mode";
-
-  if (authState.user) {
-    const emailStr = authState.user.email || authState.user.phoneNumber || "User";
-    const initial = emailStr.charAt(0).toUpperCase();
-    dropdown.innerHTML = `
-      <div class="user-dropdown-header">
-        <div class="mini-avatar">${initial}</div>
-        <div style="font-size:14px; font-weight:700; color:var(--text-primary); text-overflow:ellipsis; overflow:hidden;">${emailStr}</div>
-      </div>
-      <div class="dropdown-sep"></div>
-      <button class="dropdown-item" onclick="alert('Profile saving history feature active.')">👤 My Profile</button>
-      <button class="dropdown-item" onclick="toggleMode(); toggleUserMenu();">${modeText}</button>
-      <button class="dropdown-item" onclick="clearHistoryUI()">🗑️ Clear History</button>
-      <div class="dropdown-sep"></div>
-      <button class="dropdown-item" onclick="window.location.reload()">🔄 Refresh</button>
-      <button class="dropdown-item danger" onclick="handleLogout()">🚪 Logout</button>
-    `;
-  } else {
-    dropdown.innerHTML = `
-      <div class="user-dropdown-header">
-        <div style="font-size:14px; font-weight:700; color:var(--text-secondary);">Guest Mode (Active)</div>
-      </div>
-      <div class="dropdown-sep"></div>
-      <button class="dropdown-item primary-item" onclick="openAuthModal('signin'); toggleUserMenu();">🔑 Sign In</button>
-      <button class="dropdown-item" onclick="openAuthModal('signup'); toggleUserMenu();">📝 Sign Up</button>
-      <div class="dropdown-sep"></div>
-      <button class="dropdown-item" onclick="toggleMode(); toggleUserMenu();">${modeText}</button>
-      <button class="dropdown-item" onclick="alert('Settings feature coming soon')">⚙️ Settings</button>
-    `;
-  }
-}
-
 function clearHistoryUI() {
   if (confirm("Are you sure you want to clear your local history?")) {
     searchHistory = [];
@@ -418,25 +289,6 @@ function clearHistoryUI() {
     alert("History cleared!");
   }
 }
-
-auth.onAuthStateChanged((user) => {
-  if (user) {
-    authState.user = user;
-    authState.isGuest = false;
-    user.getIdToken().then(token => {
-      authState.sessionToken = token;
-      localStorage.setItem("sessionToken", token);
-    });
-    localStorage.setItem("authUser", JSON.stringify(user));
-  } else {
-    authState.user = null;
-    authState.isGuest = true;
-    authState.sessionToken = "";
-    localStorage.removeItem("sessionToken");
-    localStorage.removeItem("authUser");
-  }
-  updateUserUI();
-});
 
 // ── Header scroll effect ──
 window.addEventListener("scroll", () => {
@@ -527,12 +379,6 @@ function removeHistory(e, query) {
 }
 
 function saveHistory(query) {
-  // Only save history if user is logged in
-  if (!authState.user) {
-    console.log("Guest mode: history not saved.");
-    return;
-  }
-  
   query = query.trim();
   if (!query) return;
   searchHistory = searchHistory.filter(q => q !== query);
@@ -699,10 +545,22 @@ document.addEventListener("click", async (event) => {
   closeLanguageModal();
 });
 
-languageSelect.addEventListener("change", async () => {
-  await applySelectedLanguage(languageSelect.value);
-  if (activeQuery) search(1, false, { replaceHistory: true });
-});
+if (languageSelect) {
+  languageSelect.addEventListener("change", async () => {
+    try {
+      const newLang = languageSelect.value;
+      if (!newLang) return;
+      await applySelectedLanguage(newLang);
+      // Re-search with the new language if user has an active search
+      if (activeQuery) {
+        const isAiMode = searchBoxAi && searchBoxAi.style.display !== "none";
+        search(1, isAiMode, { replaceHistory: true });
+      }
+    } catch (err) {
+      console.error("Language change error:", err);
+    }
+  });
+}
 
 // ═══════════════════════════════════════════
 // VOICE SEARCH
@@ -711,7 +569,7 @@ const STT_LOCALES = {
   en: "en-IN", hi: "hi-IN", as: "as-IN", bn: "bn-IN", brx: "en-IN", doi: "en-IN",
   gu: "gu-IN", kn: "kn-IN", ks: "ur-IN", gom: "mr-IN", mai: "hi-IN", ml: "ml-IN",
   mni: "en-IN", mr: "mr-IN", ne: "ne-NP", or: "or-IN", pa: "pa-IN", sa: "hi-IN",
-  sat: "en-IN", sd: "ur-IN", ta: "ta-IN", te: "te-IN", ur: "ur-IN", bh: "bh-IN"
+  sat: "en-IN", sd: "ur-IN", ta: "ta-IN", te: "te-IN", ur: "ur-IN", bh: "hi-IN", bho: "hi-IN"
 };
 
 if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
@@ -816,7 +674,7 @@ function toggleVoiceSearch() {
       recognition.stop();
     } else {
       // Ensure we have the latest language
-      recognition.lang = STT_LOCALES[languageSelect.value] || "en-IN";
+      recognition.lang = STT_LOCALES[currentLanguage] || "en-IN";
       recognition.start();
     }
   } catch (err) {
@@ -874,6 +732,7 @@ function speakText(text, button = null) {
   const cleanText = normalizeSpeechText(text);
   if (!cleanText) return;
 
+  // If same request is already playing, stop it
   if (activeSpeechButton === button && activeSpeechText === cleanText && window.speechSynthesis.speaking) {
     stopSpeechPlayback();
     return;
@@ -882,17 +741,49 @@ function speakText(text, button = null) {
   stopSpeechPlayback();
 
   const utterance = new SpeechSynthesisUtterance(cleanText);
+  // Determine language locale
   utterance.lang = TTS_LOCALES[currentLanguage || languageSelect?.value] || "en-IN";
+  // Attempt to select a matching voice for better quality
+  const voices = window.speechSynthesis.getVoices();
+  const matchingVoice = voices.find(v => v.lang && v.lang.startsWith(utterance.lang));
+  if (matchingVoice) utterance.voice = matchingVoice;
   utterance.rate = 0.95;
   utterance.pitch = 1;
+  utterance.volume = 1;
   utterance.onend = stopSpeechPlayback;
-  utterance.onerror = stopSpeechPlayback;
+  utterance.onerror = (e) => {
+    console.error("SpeechSynthesis error:", e);
+    stopSpeechPlayback();
+  };
 
   activeSpeechButton = button;
   activeSpeechText = cleanText;
   setSpeechButtonState(button, true);
   window.speechSynthesis.speak(utterance);
 }
+
+// ── Search UI Mode (Google-style) ──
+let isSearchFocused = false;
+
+function enterSearchMode() {
+  isSearchFocused = true;
+  const box = document.getElementById('searchBoxStandard');
+  if (box) box.classList.add('search-focused');
+}
+
+function exitSearchMode() {
+  // Small delay to allow clicks on buttons inside the search box to register
+  setTimeout(() => {
+    // Don't exit if the active element is still inside the search box
+    const box = document.getElementById('searchBoxStandard');
+    if (box && box.contains(document.activeElement)) return;
+    // Don't exit if search input has text (keep clean mode while searching)
+    if (searchInput && searchInput.value.trim()) return;
+    isSearchFocused = false;
+    if (box) box.classList.remove('search-focused');
+  }, 150);
+}
+
 
 function getSearchResultsSpeechText() {
   const parts = [];
@@ -983,8 +874,8 @@ function requestLocation() {
     navigator.geolocation.getCurrentPosition(
         (position) => {
             const { latitude, longitude } = position.coords;
-            authState.location = { lat: latitude, lon: longitude };
-            localStorage.setItem("userLocation", JSON.stringify(authState.location));
+            appState.location = { lat: latitude, lon: longitude };
+            localStorage.setItem("userLocation", JSON.stringify(appState.location));
             
             if (btn) {
                 btn.classList.remove("loading-loc");
@@ -992,7 +883,7 @@ function requestLocation() {
                 btn.style.color = "var(--accent-green)";
             }
             
-            console.log("Location updated:", authState.location);
+            console.log("Location updated:", appState.location);
             // Optional: Show a small toast or update UI to show city name
             if (activeQuery) search(1, false, { replaceHistory: true });
         },
@@ -1006,7 +897,7 @@ function requestLocation() {
 }
 
 // Auto-load location if already granted in this session
-if (authState.location) {
+if (appState.location) {
     const btn = document.getElementById("locationButton");
     if (btn) {
         btn.classList.add("loc-active");
@@ -1020,7 +911,7 @@ function closeLocationPopup() {
 }
 
 function handleLocationChoice(enabled) {
-    authState.locationChoiceMade = true;
+    appState.locationChoiceMade = true;
     localStorage.setItem("locationChoiceMade", "true");
     closeLocationPopup();
     
@@ -1215,7 +1106,7 @@ async function triggerVisualSearch(file) {
   
   const formData = new FormData();
   formData.append("file", file);
-  if (authState.sessionToken) formData.append("session_token", authState.sessionToken);
+  formData.append("session_token", appState.guestId);
 
   try {
     if (currentFilter === "nutrition") {
@@ -1241,7 +1132,7 @@ async function triggerVisualSearch(file) {
 
     const formData = new FormData();
     formData.append("file", file);
-    if (authState.sessionToken) formData.append("session_token", authState.sessionToken);
+    formData.append("session_token", appState.guestId);
 
     const res = await fetchWithApiFallback(`/visual-search`, {
       method: "POST",
@@ -1301,9 +1192,7 @@ if (pdfInput) {
     
     const formData = new FormData();
     formData.append("file", f);
-    // Prefer sessionToken, fallback to persistent guestSession
-    const finalSess = authState.sessionToken || authState.guestId;
-    formData.append("session_token", finalSess);
+    formData.append("session_token", appState.guestId);
 
     try {
       const res = await fetchWithApiFallback(`/upload-pdf`, {
@@ -1378,13 +1267,16 @@ async function resetToHome(options = {}) {
   
   applyFilterActiveState("all");
   document.documentElement.setAttribute("data-ai-mode", "false");
+  // Restore full search UI (camera, Ask AI buttons)
+  const searchBox = document.getElementById('searchBoxStandard');
+  if (searchBox) searchBox.classList.remove('search-focused');
+  isSearchFocused = false;
   closeAutocomplete();
   if (!skipHistory) writeBrowserSearchState({ query: "" }, replaceHistory);
   
   // Clear backend memory context for this session
-  const finalSess = authState.sessionToken || authState.guestId;
   try {
-      await apiJsonRequest("/clear-context", { session_token: finalSess });
+      await apiJsonRequest("/clear-context", { session_token: appState.guestId });
   } catch(e) { console.error("Failed to clear context"); }
 }
 
@@ -1419,6 +1311,15 @@ function getReadableHost(url, fallback = "Source") {
     return new URL(url).hostname.replace(/^www\./, "");
   } catch {
     return fallback;
+  }
+}
+
+function getFaviconUrl(url = "") {
+  try {
+    const host = new URL(url).hostname;
+    return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=32`;
+  } catch {
+    return "favicon-32x32.png";
   }
 }
 
@@ -1460,10 +1361,44 @@ function getVideoThumbnail(item = {}, title = "") {
   return mediaFallbackImage(title || item.title || "Video", "Video");
 }
 
+// ─── renderAiSources: Minimal circular favicon row for top-left of AI card ───
 function renderAiSources(sources = []) {
-  // User requested to hide the sources panel/cards. 
-  // Citations [1], [2] will still appear inside the markdown answer.
-  return "";
+  if (!sources || sources.length === 0) return "";
+
+  // Deduplicate by host
+  const seen = new Set();
+  const unique = sources.filter(src => {
+    const h = src.host || src.url || "";
+    if (seen.has(h)) return false;
+    seen.add(h);
+    return true;
+  });
+
+  const icons = unique.slice(0, 8).map((src) => {
+    const url   = escapeHtml(src.url);
+    const host  = escapeHtml(src.host || getReadableHost(src.url) || "source");
+    const siteName = host.split('.')[0];
+    const displayName = siteName.charAt(0).toUpperCase() + siteName.slice(1);
+    const faviconUrl = `https://www.google.com/s2/favicons?sz=32&domain=${host}`;
+    const initials = displayName.slice(0, 2);
+
+    return `
+      <a class="ai-source-favicon-link" href="${url}" target="_blank" rel="noopener noreferrer" title="${displayName}">
+        <img src="${faviconUrl}" alt="${initials}"
+          onerror="this.onerror=null;this.src='data:image/svg+xml;charset=utf-8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2214%22 height=%2214%22 viewBox=%220 0 14 14%22><rect width=%2214%22 height=%2214%22 rx=%227%22 fill=%22%234285f4%22/><text x=%227%22 y=%2210.5%22 font-size=%228%22 font-family=%22sans-serif%22 fill=%22white%22 text-anchor=%22middle%22 font-weight=%22bold%22>${initials}</text></svg>'"
+        >
+      </a>
+    `;
+  }).join("");
+
+  return `<div class="ai-sources-minimal-row">
+    <span class="ai-sources-label">Sources</span>
+    ${icons}
+  </div>`;
+}
+
+function renderAiSourcesIcons(sources = []) {
+  return renderAiSources(sources);
 }
 
 function renderMarkdownWithCitations(markdown = "", sources = []) {
@@ -1545,7 +1480,7 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
   }
 
   // ── Advanced Mode Location Check ──
-  if (advancedMode && !authState.location && !authState.locationChoiceMade) {
+  if (advancedMode && !appState.location && !appState.locationChoiceMade) {
       const modal = document.getElementById("locationPopup");
       if (modal) {
           modal.style.display = "flex";
@@ -1592,12 +1527,11 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
         advanced_mode: String(advancedMode),
         history: aiMode ? JSON.stringify(chatHistory) : ""
     });
-    const finalSess = authState.sessionToken || authState.guestId;
-    params.set("session_token", finalSess);
+    params.set("session_token", appState.guestId);
     
-    if (authState.location) {
-        params.set("lat", String(authState.location.lat));
-        params.set("lon", String(authState.location.lon));
+    if (appState.location) {
+        params.set("lat", String(appState.location.lat));
+        params.set("lon", String(appState.location.lon));
     }
 
     const res = await fetchWithApiFallback(`/search?${params}`);
@@ -1607,14 +1541,6 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
     }
 
     if (!res.ok) {
-      // Auth check disabled for now
-      // if (res.status === 401) {
-      //   openAuthModal();
-      //   setAuthMessage("Please login to use IndiaSearch.", true);
-      //   resultsBox.innerHTML = "";
-      //   if (paginationContainer) paginationContainer.innerHTML = "";
-      //   return;
-      // }
       throw new Error(data.error || `Backend error (status ${res.status})`);
     }
 
@@ -1627,7 +1553,7 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
             <p style="color: var(--text-secondary); margin-bottom: 25px;">The content you are searching for requires you to be 18 years or older. Are you 18 or older?</p>
             <div style="display: flex; gap: 15px; justify-content: center;">
               <button onclick="confirmAgeAndSearch('${query}', ${pageNumber}, ${aiMode})" class="btn-primary" style="background: #ef4444; border-color: #ef4444; padding: 10px 30px;">Yes, I am 18+</button>
-              <button onclick="resetToHome()" class="btn-primary" style="background: var(--bg-alt); color: var(--text-primary); border-color: var(--border); padding: 10px 30px;">No, take me back</button>
+              <button id="askAiButton" onclick="enterAiMode()" class="btn-ai-toggle" title="Switch to AI Mode" style="background: var(--bg-alt); color: var(--text-primary); border-color: var(--border); padding: 10px 30px;">No, take me back</button>
             </div>
           </div>
         `;
@@ -1650,33 +1576,45 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
       if (aiMode || data.intent === 'ai') {
         shouldAnimate = true;
         
-        // Render FULL HISTORY for AI Mode
+        // Render FULL HISTORY for AI Mode — plain, no bubbles
         let historyHtml = chatHistory.slice(0, -1).map(msg => `
-            <div class="chat-msg ${msg.role}">
-                <div class="chat-msg-icon">${msg.role === 'user' ? '👤' : '✨'}</div>
-                <div class="chat-msg-text">${msg.role === 'assistant' ? renderMarkdownWithCitations(msg.content) : msg.content}</div>
+            <div class="ai-${msg.role === 'user' ? 'q' : 'a'}-block">
+              ${ msg.role === 'user'
+                 ? `<p class="ai-q-text">${escapeHtml(msg.content)}</p>`
+                 : `<div class="ai-answer-body">${renderMarkdownWithCitations(msg.content)}</div>`
+              }
             </div>
         `).join("");
 
         summaryHtml = `
-          <div class="ai-chat-container">
+          <div class="ai-conversation">
             ${historyHtml}
-            <div class="chat-msg assistant">
-                <div class="chat-msg-icon">✨</div>
-                <div class="chat-msg-text" id="streamingAI"></div>
-                ${renderVoiceButton("Listen to answer", "tts-card-btn")}
+            <div class="ai-q-block">
+              <p class="ai-q-text">${escapeHtml(query)}</p>
             </div>
-            ${aiSourcesHtml}
+            <div class="ai-a-block">
+              <div class="ai-answer-meta">
+                ${aiSourcesHtml}
+                ${renderVoiceButton("Listen to answer", "tts-card-btn")}
+              </div>
+              <div class="ai-answer-body" id="streamingAI"></div>
+            </div>
           </div>`;
+
       } else {
         summaryHtml = `
           <div class="summary-card">
-            <div class="summary-label-row">
-              <div class="summary-label">✨ Instant AI Answer</div>
+            <div class="ai-card-header">
+              <div class="ai-card-header-left">
+                <div class="ai-query-header">
+                  <div class="ai-query-avatar">✨</div>
+                  <span class="ai-query-text">${escapeHtml(query)}</span>
+                </div>
+                ${aiSourcesHtml}
+              </div>
               ${renderVoiceButton("Listen to answer")}
             </div>
             <div class="summary-text">${renderMarkdownWithCitations(rawText, aiSources)}</div>
-            ${aiSourcesHtml}
           </div>`;
       }
     }
@@ -1825,6 +1763,7 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
       let host = item.url;
       try { host = new URL(item.url).hostname.replace(/^www\./, ""); } catch { }
       const sourceName = getSourceBadge(item.url, host);
+      const faviconUrl = getFaviconUrl(item.url);
 
       if (aiMode) {
         return ""; // In true AI Mode, don't show normal results
@@ -1888,6 +1827,7 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
               </div>`}
             <div class="news-card-body">
               <div class="news-card-meta">
+                <img class="result-favicon-img news-favicon" src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" onerror="this.style.display='none'">
                 <span class="news-source-chip">${sourceName}</span>
                 <span class="news-dot">·</span>
                 <span class="news-card-host">${host}</span>
@@ -1934,7 +1874,9 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
       return `
         <div class="result-item">
           <div class="result-site-line">
-            <div class="result-favicon">🌐</div>
+            <div class="result-favicon">
+              <img class="result-favicon-img" src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" onerror="this.parentElement.textContent='🌐'">
+            </div>
             <span class="result-host">${host}</span>
           </div>
           <div class="result-title-row">
@@ -2018,6 +1960,16 @@ function renderPagination(totalHits, currentPage) {
 // ═══════════════════════════════════════════
 const autocompleteDropdown = document.getElementById("autocompleteDropdown");
 const searchBox = document.querySelector(".search-box");
+
+function enterSearchMode() {
+    if (trendingContainer) trendingContainer.style.display = "block";
+}
+
+function exitSearchMode() {
+    setTimeout(() => {
+        if (trendingContainer) trendingContainer.style.display = "none";
+    }, 200);
+}
 
 searchInput.addEventListener("input", e => {
   const val = e.target.value.trim().toLowerCase();
@@ -2141,290 +2093,6 @@ function closeImageModal() {
   document.getElementById("downloadMenu").style.display = "none";
 }
 // ═══════════════════════════════════════════
-// ADVANCED AUTHENTICATION (LINK-BASED)
-// ═══════════════════════════════════════════
-let currentAuthToken = "";
-
-function setAuthMessage(msg, isError = false) {
-  const authMessage = document.getElementById("authMessage");
-  if (!authMessage) return;
-  authMessage.textContent = msg || "";
-  authMessage.className = "auth-msg" + (msg ? (isError ? " error" : " success") : "");
-}
-
-function openAuthModal(initialMode = 'signin') {
-  const authModal = document.getElementById("authModal");
-  if (authModal) authModal.style.display = "flex";
-  switchAuthMode(initialMode);
-}
-
-function closeAuthModal() {
-  const authModal = document.getElementById("authModal");
-  if (authModal) authModal.style.display = "none";
-  setAuthMessage("");
-}
-
-function switchAuthMode(mode) {
-  const signinForm = document.getElementById("signinForm");
-  const signupForm = document.getElementById("signupForm");
-  const verifyForm = document.getElementById("verifySuccessForm");
-  const tabSignin = document.getElementById("tabSignin");
-  const tabSignup = document.getElementById("tabSignup");
-
-  if (!signinForm || !signupForm) return;
-
-  setAuthMessage("");
-  
-  if (mode === 'signin') {
-    signinForm.style.display = "grid";
-    signupForm.style.display = "none";
-    verifyForm.style.display = "none";
-    tabSignin.classList.add("active");
-    tabSignup.classList.remove("active");
-  } else if (mode === 'signup') {
-    signinForm.style.display = "none";
-    signupForm.style.display = "grid";
-    verifyForm.style.display = "none";
-    tabSignin.classList.remove("active");
-    tabSignup.classList.add("active");
-  } else if (mode === 'verify') {
-    signinForm.style.display = "none";
-    signupForm.style.display = "none";
-    verifyForm.style.display = "grid";
-  }
-}
-
-async function submitSignin() {
-  const email = document.getElementById("loginEmail").value.trim();
-  const password = document.getElementById("loginPassword").value;
-  const captcha = document.getElementById("loginCaptcha").value.trim();
-
-  if (!email || !password || !captcha) {
-    setAuthMessage("Email, Password, and Captcha are required.", true);
-    return;
-  }
-
-  try {
-    setAuthMessage("Authenticating with IndiaSearch...");
-    const res = await apiJsonRequest(`/auth/login`, { 
-      identifier: email, 
-      password, 
-      captcha_code: captcha 
-    });
-    
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Login failed");
-
-    authState.sessionToken = data.session_token;
-    authState.user = data.user;
-    localStorage.setItem("sessionToken", data.session_token);
-    localStorage.setItem("authUser", JSON.stringify(data.user));
-    
-    setAuthMessage("Login successful! Redirecting...", false);
-    setTimeout(() => {
-      renderAuthState();
-      closeAuthModal();
-      // Also close the dropdown if it was open
-      const dropdown = document.getElementById("userDropdown");
-      if (dropdown) dropdown.style.display = "none";
-    }, 800);
-  } catch (err) {
-    setAuthMessage(err.message, true);
-  }
-}
-
-async function requestSignupLink() {
-  const email = document.getElementById("signupEmail").value.trim();
-  if (!email || !email.includes("@")) {
-    setAuthMessage("Please enter a valid email address.", true);
-    return;
-  }
-
-  try {
-    setAuthMessage("Sending secure verification link...");
-    const res = await apiJsonRequest(`/auth/signup/request`, { 
-      email: email
-    });
-    
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Request failed");
-
-    // Simulator: Show the link for the user to "click"
-    currentAuthToken = data.debug_token;
-    document.getElementById("verifyEmailDisplay").value = email;
-    
-    setAuthMessage("Verification link generated! In a real scenario, this goes to your inbox.", false);
-    
-    // Add Simulation Button
-    const simDiv = document.createElement("div");
-    simDiv.style.marginTop = "15px";
-    simDiv.innerHTML = `
-      <button class="btn-primary full-w" style="background: #34a853; border-color: #34a853;" 
-              onclick="switchAuthMode('verify')">Simulate Email Link Click</button>
-    `;
-    document.getElementById("authMessage").appendChild(simDiv);
-
-  } catch (err) {
-    setAuthMessage(err.message, true);
-  }
-}
-
-async function completeSignupVerification() {
-  const password = document.getElementById("verifyPassword").value;
-  const verificationEmail = document.getElementById("verifyEmailDisplay").value;
-  const code = currentAuthToken;
-  if (!password || password.length < 8) {
-    setAuthMessage("Password must be at least 8 characters for security.", true);
-    return;
-  }
-
-  try {
-    setAuthMessage("Finalizing your account...");
-    const res = await apiJsonRequest(`/auth/signup/verify`, { 
-      token: currentAuthToken, password
-    });
-    
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Setup failed");
-
-    authState.sessionToken = data.session_token;
-    authState.user = data.user;
-    localStorage.setItem("sessionToken", data.session_token);
-    localStorage.setItem("authUser", JSON.stringify(data.user));
-    
-    setAuthMessage("Account created successfully! Welcome to IndiaSearch.", false);
-    setTimeout(() => {
-      renderAuthState();
-      closeAuthModal();
-    }, 1000);
-  } catch (err) {
-    setAuthMessage(err.message, true);
-  }
-}
-
-function renderAuthState() {
-  const guestMenu = document.getElementById("guestMenu");
-  const loggedMenu = document.getElementById("loggedMenu");
-  const userEmail = document.getElementById("userEmail");
-  const userAvatarMini = document.getElementById("userAvatarMini");
-
-  if (authState.user && authState.sessionToken) {
-    if (guestMenu) guestMenu.style.display = "none";
-    if (loggedMenu) loggedMenu.style.display = "block";
-    
-    const id = authState.user.identifier || "";
-    if (userEmail) userEmail.textContent = id.split('@')[0];
-    if (userAvatarMini) userAvatarMini.textContent = (id[0] || "U").toUpperCase();
-    
-    closeAuthModal();
-  } else {
-    if (guestMenu) guestMenu.style.display = "block";
-    if (loggedMenu) loggedMenu.style.display = "none";
-  }
-}
-
-function toggleUserDropdown(e) {
-  if (e) e.stopPropagation();
-  const dropdown = document.getElementById("userDropdown");
-  if (!dropdown) return;
-  const isShown = dropdown.style.display === "flex" || dropdown.style.display === "block";
-  dropdown.style.display = isShown ? "none" : "flex";
-}
-
-window.addEventListener("click", () => {
-  const dropdown = document.getElementById("userDropdown");
-  if (dropdown && dropdown.style.display !== "none") {
-    dropdown.style.display = "none";
-  }
-});
-
-async function hydrateSession() {
-  if (!authState.sessionToken) return;
-  try {
-    const res = await fetchWithApiFallback(`/auth/me?session_token=${encodeURIComponent(authState.sessionToken)}`);
-    if (!res.ok) throw new Error("Session invalid");
-    const data = await res.json();
-    authState.user = data.user;
-    localStorage.setItem("authUser", JSON.stringify(data.user));
-    renderAuthState();
-  } catch {
-    localStorage.removeItem("sessionToken"); localStorage.removeItem("authUser");
-    authState = { sessionToken: "", user: null };
-    renderAuthState();
-  }
-}
-
-// ── Profile ──
-function formatHistoryMeta(item) {
-  return `${item.ai_mode ? "Ask AI" : "Search"} · ${(item.filter_type || "all").replace(/^./, c => c.toUpperCase())}`;
-}
-
-async function openProfileModal() {
-  if (!authState.sessionToken) { openAuthModal(); return; }
-  if (profileModal) profileModal.style.display = "flex";
-  if (profileSummary) profileSummary.innerHTML = "<p class='profile-empty'>Loading…</p>";
-  if (profileHistory) profileHistory.innerHTML = "";
-
-  try {
-    const res = await fetchWithApiFallback(`/auth/profile?session_token=${encodeURIComponent(authState.sessionToken)}`);
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Could not load profile.");
-
-    authState.user = data.user;
-    localStorage.setItem("authUser", JSON.stringify(data.user));
-    renderAuthState();
-
-    profileSummary.innerHTML = `
-      <div class="profile-stat">
-        <span class="profile-label">Account (${data.user.identifier_type || "Unknown"})</span>
-        <strong>${data.user.identifier || data.user.email || data.user.phone}</strong>
-      </div>`;
-
-    if (!data.history || data.history.length === 0) {
-      profileHistory.innerHTML = `<p class="profile-empty">Your recent searches will appear here.</p>`;
-      return;
-    }
-
-    profileHistory.innerHTML = data.history.map(item => `
-      <button class="profile-history-item" onclick="useProfileHistory(decodeURIComponent('${encodeURIComponent(item.query)}'), ${item.ai_mode ? "true" : "false"})">
-        <span class="profile-history-query">${item.query}</span>
-        <span class="profile-history-meta">${formatHistoryMeta(item)}</span>
-      </button>`).join("");
-  } catch (err) {
-    if (profileSummary) profileSummary.innerHTML = `<p class="profile-empty">${err.message}</p>`;
-  }
-}
-
-function closeProfileModal() {
-  if (profileModal) profileModal.style.display = "none";
-}
-
-function useProfileHistory(query, aiMode = false) {
-  closeProfileModal();
-  searchInput.value = query;
-  search(1, aiMode);
-}
-
-async function logout() {
-  try {
-    if (authState.sessionToken) {
-      await fetchWithApiFallback("/auth/logout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session_token: authState.sessionToken }),
-      });
-    }
-  } catch (err) {
-    console.warn("Logout request failed:", err);
-  }
-  localStorage.removeItem("sessionToken");
-  localStorage.removeItem("authUser");
-  authState = { sessionToken: "", user: null };
-  renderAuthState();
-  closeProfileModal();
-}
-
-// ═══════════════════════════════════════════
 // HOME WIDGETS
 // ═══════════════════════════════════════════
 function setSearchFocus(q) {
@@ -2525,7 +2193,7 @@ function renderNutritionPanel(n) {
     };
     const tags = n.tags || n.health_tags || [];
     const colors = n.tag_colors || tags.map(() => "green");
-    const tip = n.tip || n.hindi_tip || "";
+    const tip = (currentLanguage === 'en' ? n.tip : n.hindi_tip) || "";
 
     const tagsHtml = tags.map((t, i) => {
         const color = colors[i] || "green";
@@ -2724,12 +2392,22 @@ fetchWithApiFallback = async function(path, options = {}) {
 
 document.addEventListener("DOMContentLoaded", async () => {
   const hasSavedLanguage = Boolean(localStorage.getItem(LANGUAGE_STORAGE_KEY));
+  
+  // If no saved language, auto-detected language is already in currentLanguage
+  // Save it so future visits remember it
+  if (!hasSavedLanguage) {
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, currentLanguage);
+  }
+  
+  // Sync dropdown to current language
+  if (languageSelect) languageSelect.value = currentLanguage;
+  
   renderHistory();
   renderTrending();
-  renderAuthState();
-  hydrateSession();
   initHomeWidgets();
   await applySelectedLanguage(currentLanguage);
+  
+  // Show language modal only on first ever visit so user can override auto-detection
   if (!hasSavedLanguage) {
     const modal = document.getElementById("languageModal");
     if (modal) modal.style.display = "flex";
@@ -2822,6 +2500,10 @@ async function openAboutPage(e) {
   if (e) e.preventDefault();
   const overlay = document.getElementById("aboutOverlay");
   if (overlay) {
+    const founderVideo = overlay.querySelector("iframe[data-src]");
+    if (founderVideo && !founderVideo.src) {
+      founderVideo.src = founderVideo.dataset.src;
+    }
     overlay.style.display = "flex";
     document.body.style.overflow = "hidden";
     checkAdminStatus();
@@ -2841,13 +2523,12 @@ function checkAdminStatus() {
   const panel = document.getElementById("aboutAdminPanel");
   const mediaForm = document.getElementById("mediaUploadForm");
   if (!panel) return;
-  const userIdentifier = authState.user ? (authState.user.identifier || authState.user.email || authState.user.phoneNumber) : null;
   panel.style.display = "block";
-  if (mediaForm) mediaForm.style.display = userIdentifier === ADMIN_IDENTIFIER ? "flex" : "none";
+  if (mediaForm) mediaForm.style.display = "none";
 }
 
 function getAboutOwnerToken() {
-  return authState.sessionToken || authState.guestId || localStorage.getItem("guestSession") || "";
+  return appState.guestId || localStorage.getItem("guestSession") || "";
 }
 
 async function loadAboutContent() {
@@ -2875,8 +2556,8 @@ function renderAboutPublications(pubs) {
   }
 
   const ownerToken = getAboutOwnerToken();
-  const currentIdentifier = authState.user ? (authState.user.identifier || authState.user.email || authState.user.phoneNumber || "") : "";
-  const isAdminUser = currentIdentifier === ADMIN_IDENTIFIER;
+  const currentIdentifier = "";
+  const isAdminUser = false;
 
   container.innerHTML = pubs.map(p => {
     const canDelete = isAdminUser || (ownerToken && p.owner_session_token === ownerToken) || (currentIdentifier && p.owner_identifier === currentIdentifier);

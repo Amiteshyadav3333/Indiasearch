@@ -66,6 +66,7 @@ def build_ai_sources(results: list, limit: int = 8) -> list:
             "host": host,
             "snippet": (item.get("snippet") or item.get("content") or "")[:220],
             "source": item.get("source") or host,
+            "image": item.get("image") or item.get("thumbnail") or item.get("thumbnailUrl") or item.get("image_url") or "",
         })
 
         if len(sources) >= limit:

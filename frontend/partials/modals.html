@@ -1,0 +1,84 @@
+<!-- ═══ FIRST VISIT LANGUAGE MODAL ═══ -->
+  <div id="languageModal" class="overlay-modal language-modal" style="display:none;">
+    <div class="language-card">
+      <div class="language-card-header">
+        <div class="language-brand">
+          <span class="brand-india">India</span><span class="brand-search">Search</span><span class="brand-dot">.</span>
+        </div>
+        <h2 data-i18n="languageTitle">Choose your language</h2>
+        <p data-i18n="languageSubtitle">IndiaSearch will open in your selected language.</p>
+      </div>
+      <div class="language-grid" id="languageGrid">
+        <button class="language-choice" data-lang="en">English</button>
+        <button class="language-choice" data-lang="hi">हिंदी</button>
+        <button class="language-choice" data-lang="bn">বাংলা</button>
+        <button class="language-choice" data-lang="mr">मराठी</button>
+        <button class="language-choice" data-lang="gu">ગુજરાતી</button>
+        <button class="language-choice" data-lang="ta">தமிழ்</button>
+        <button class="language-choice" data-lang="te">తెలుగు</button>
+        <button class="language-choice" data-lang="kn">ಕನ್ನಡ</button>
+        <button class="language-choice" data-lang="ml">മലയാളം</button>
+        <button class="language-choice" data-lang="pa">ਪੰਜਾਬੀ</button>
+        <button class="language-choice" data-lang="ur">اردو</button>
+        <button class="language-choice" data-lang="or">ଓଡ଼ିଆ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ IMAGE MODAL ═══ -->
+  <div id="imageModal" class="overlay-modal" style="display:none;" onclick="if(event.target===this)closeImageModal()">
+    <div class="img-modal-inner">
+      <div class="img-modal-bar">
+        <button class="img-bar-btn" onclick="toggleDownloadMenu()" title="More options">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+            <circle cx="12" cy="5" r="1.5" />
+            <circle cx="12" cy="12" r="1.5" />
+            <circle cx="12" cy="19" r="1.5" />
+          </svg>
+        </button>
+        <div id="downloadMenu" class="download-menu" style="display:none;">
+          <a id="downloadBtn" class="download-item">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Download Image
+          </a>
+        </div>
+        <button class="img-bar-btn img-close-btn" onclick="closeImageModal()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+      <img id="zoomedImage" class="zoomed-img" src="" alt="Zoomed Image">
+    </div>
+  </div>
+
+  <!-- ═══ LOCATION POPUP (ADVANCED MODE) ═══ -->
+  <div id="locationPopup" class="overlay-modal" style="display:none;"
+    onclick="if(event.target===this)closeLocationPopup()">
+    <div class="modal-card location-popup-card">
+      <div class="modal-header">
+        <h2>Localized Search</h2>
+        <button class="modal-x-btn" onclick="closeLocationPopup()">&times;</button>
+      </div>
+      <div style="padding: 20px; text-align: center;">
+        <p style="color: var(--text-secondary); margin-bottom: 20px; line-height: 1.6;">
+         To improve Advanced Search, can we use your location? This helps you find local businesses and startups in your city.
+        </p>
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <button onclick="handleLocationChoice(true)" class="btn-primary"
+            style="background: var(--accent-green); border-color: var(--accent-green);">
+            yes, Location parmission Enable
+          </button>
+          <button onclick="handleLocationChoice(false)" class="btn-primary"
+            style="background: var(--bg-alt); color: var(--text-primary); border-color: var(--border);">
+            No,Location parmission denied
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
