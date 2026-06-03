@@ -1,4 +1,6 @@
 setuptools>=70.0.0
+gunicorn==22.0.0
+
 aiohappyeyeballs==2.6.1
 aiohttp==3.13.4
 aiosignal==1.4.0

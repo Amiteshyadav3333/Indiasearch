@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: indiasearch
+    runtime: python
+    plan: free
+    buildCommand: pip install --no-cache-dir -r requirements.txt
+    startCommand: gunicorn app.main:app -k uvicorn.workers.UvicornWorker --workers 1 --threads 1 --max-requests 500 --max-requests-jitter 50 --timeout 120 --bind 0.0.0.0:$PORT
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: RENDER
+        value: "true"
+      - key: DISABLE_CRAWLER
+        value: "true"
+      - key: WEB_CONCURRENCY
+        value: "1"

@@ -63,11 +63,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+IS_RENDER = os.getenv("RENDER", "false").lower() == "true"
+DISABLE_CRAWLER = os.getenv("DISABLE_CRAWLER", "false").lower() == "true" or IS_RENDER
+
 async def daily_crawler_task():
+    if DISABLE_CRAWLER:
+        logger.info("[Auto-Crawler] Disabled on Render/low-memory environment. Skipping crawl.")
+        return
     while True:
         try:
             logger.info("[Auto-Crawler] Starting daily background web crawl...")
-            crawler = Crawler(max_pages=300, max_depth=2, max_concurrency=10)
+            # Reduced limits on cloud deployment to save memory
+            crawler = Crawler(max_pages=50, max_depth=1, max_concurrency=3)
             await crawler.run(SEED_URLS)
             logger.info("[Auto-Crawler] Daily crawl complete. Sleeping for 24 hours.")
         except Exception as e:
@@ -75,19 +82,29 @@ async def daily_crawler_task():
         await asyncio.sleep(86400)
 
 async def hot_cache_warmer_task():
-    """Warms cache for top queries every 30 minutes."""
-    await asyncio.sleep(300)  # Wait 5 min after startup for system to warm up
+    """Warms cache for top queries. Reduced frequency on Render free tier."""
+    # Wait longer on Render to let server stabilize before using memory
+    wait_time = 600 if IS_RENDER else 300
+    await asyncio.sleep(wait_time)
     while True:
         try:
-            await hot_query_store.warm_hot_cache(run_parallel_pipeline, top_n=20)
+            # Warm fewer queries on Render to save RAM
+            top_n = 5 if IS_RENDER else 20
+            await hot_query_store.warm_hot_cache(run_parallel_pipeline, top_n=top_n)
         except Exception as e:
             logger.error(f"[HotCache] Warming error: {e}")
-        await asyncio.sleep(1800)  # Re-warm every 30 minutes
+        # Re-warm every 60 min on Render, 30 min locally
+        await asyncio.sleep(3600 if IS_RENDER else 1800)
 
 @app.on_event("startup")
 async def startup_event():
     asyncio.create_task(daily_crawler_task())
-    asyncio.create_task(hot_cache_warmer_task())
+    if not DISABLE_CRAWLER:  # Only warm cache when crawler is active
+        asyncio.create_task(hot_cache_warmer_task())
+    elif not IS_RENDER:
+        asyncio.create_task(hot_cache_warmer_task())
+    logger.info(f"[Startup] Render={IS_RENDER} | Crawler={'OFF' if DISABLE_CRAWLER else 'ON'}")
+
 
 # --- Mount Static Files ---
 FRONTEND_PATH = os.path.join(os.path.dirname(__file__), "..", "frontend")
