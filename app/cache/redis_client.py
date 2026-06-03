@@ -40,23 +40,26 @@ class RedisClient:
                 return None
             cls._last_attempt_time = now
 
-            # First look for REDIS_URL in env directly, fallback to empty string
             url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
             try:
-                cls._client = redis.from_url(
-                    url,
-                    decode_responses=True,        # Return strings, not bytes
-                    max_connections=20,           # Connection pool size
-                    socket_connect_timeout=1,     # Fail fast if Redis is down
-                    socket_timeout=1              # Operation timeout
+                # Upstash and other cloud Redis providers use rediss:// (SSL)
+                kwargs = dict(
+                    decode_responses=True,
+                    max_connections=20,
+                    socket_connect_timeout=3,
+                    socket_timeout=3,
                 )
-                cls._client.ping()                # Early health check
-                logger.info(f"[Redis] Connected to: {url}")
+                # Add SSL cert bypass for Upstash (uses self-signed certs)
+                if url.startswith("rediss://"):
+                    kwargs["ssl_cert_reqs"] = None
+
+                cls._client = redis.from_url(url, **kwargs)
+                cls._client.ping()  # Early health check
+                logger.info(f"[Redis] ✅ Connected to: {url.split('@')[-1]}")  # Hide password in logs
             except Exception as e:
-                # Suppress log spam if local redis is not running
                 if "localhost" not in url:
-                    logger.error(f"[Redis] Connection to {url} failed: {e}")
-                cls._client = None                # Ensure it remains None if connection fails
+                    logger.error(f"[Redis] ❌ Connection failed: {e}")
+                cls._client = None
         return cls._client
 
     @classmethod
