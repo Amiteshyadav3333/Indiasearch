@@ -254,7 +254,7 @@ def get_direct_hit(query: str) -> list:
         
     return []
 
-async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", lang: str = "en", force_ai: bool = False, pdf_content: str = None, age_verified: bool = False, advanced_mode: bool = False, history: list = None, lat: float = None, lon: float = None) -> dict:
+async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", lang: str = "en", force_ai: bool = False, pdf_content: str = None, age_verified: bool = False, advanced_mode: bool = False, history: list = None, lat: float = None, lon: float = None, limit: int = 10) -> dict:
     """
     Master Orchestrator implementing the user's requested architecture.
     """
@@ -350,7 +350,7 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
     normalized = normalize_query(en_query)
     # Round lat/lon to 2 decimal places (approx 1km accuracy) for cache stability
     loc_suffix = f":{round(lat, 2)}:{round(lon, 2)}" if lat and lon else ""
-    cache_key = CacheManager.make_key("brain:search:v7", detected_lang, output_language, normalized, page, intent, filter, "advanced" if advanced_mode else "standard") + loc_suffix
+    cache_key = CacheManager.make_key("brain:search:v7", detected_lang, output_language, normalized, page, intent, filter, "advanced" if advanced_mode else "standard", limit) + loc_suffix
     
     # Record this query for hot cache warming
     hot_query_store.record_query(normalized)
@@ -566,8 +566,8 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
     if advanced_mode or intent == "nutrition":
         paginated = final_ranked[:4] # Only 4 highly accurate links for specialized searches
     else:
-        offset = (page - 1) * MAX_WEB_RESULTS
-        paginated = final_ranked[offset : offset + MAX_WEB_RESULTS]
+        offset = (page - 1) * limit
+        paginated = final_ranked[offset : offset + limit]
 
     took_ms = round((time.time() - start_time) * 1000, 1)
     

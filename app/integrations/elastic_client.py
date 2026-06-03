@@ -41,11 +41,12 @@ class ElasticClient:
         try:
             auth = (username, password) if username and password else None
             client = Elasticsearch(url, basic_auth=auth, request_timeout=3)
-            if client.ping():
+            try:
+                client.info()
                 logger.info(f"[Elastic] Connected to: {url}")
                 return client
-            else:
-                logger.warning("[Elastic] Ping failed — ES unreachable.")
+            except Exception as e:
+                logger.warning(f"[Elastic] Connection check failed: {e}")
                 return None
         except Exception as e:
             logger.error(f"[Elastic] Connection error: {e}")

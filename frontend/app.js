@@ -10,6 +10,14 @@ const PROD_API_BASES = [
 ];
 let activeApiBase = isLocalHost ? LOCAL_API_BASE : PROD_API_BASES[0];
 
+// ── Settings State ──
+const SETTINGS_STORAGE_KEY = "indiasearchSettings";
+let appSettings = {
+  safeSearch: localStorage.getItem("safeSearch") || "moderate",
+  resultsCount: parseInt(localStorage.getItem("resultsCount") || "10", 10),
+  autoPlayVoice: localStorage.getItem("autoPlayVoice") === "true"
+};
+
 // ── DOM Refs ──
 const searchInput = document.getElementById("searchInput");
 const resultsBox = document.getElementById("results");
@@ -572,6 +580,9 @@ const STT_LOCALES = {
   sat: "en-IN", sd: "ur-IN", ta: "ta-IN", te: "te-IN", ur: "ur-IN", bh: "hi-IN", bho: "hi-IN"
 };
 
+// Track which mode triggered voice recognition ("ai" or "search")
+let voiceModeTarget = "search";
+
 if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   recognition = new SR();
@@ -581,7 +592,7 @@ if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
   recognition.onstart = () => {
     isListening = true;
     updateMicUI();
-    const target = (searchBoxAi && searchBoxAi.style.display !== "none") ? aiSearchInput : searchInput;
+    const target = voiceModeTarget === "ai" ? aiSearchInput : searchInput;
     if (target) {
       target.placeholder = "सुन रहा हूँ… Listening…";
       target.value = ""; // Clear for new voice input
@@ -600,7 +611,7 @@ if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
       }
     }
 
-    const target = (searchBoxAi && searchBoxAi.style.display !== "none") ? aiSearchInput : searchInput;
+    const target = voiceModeTarget === "ai" ? aiSearchInput : searchInput;
     if (target) {
       target.value = finalTranscript || interimTranscript;
       if (target === aiSearchInput) autoExpand(target);
@@ -608,7 +619,7 @@ if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
 
     if (finalTranscript) {
       recognition.stop();
-      if (searchBoxAi && searchBoxAi.style.display !== "none") {
+      if (voiceModeTarget === "ai") {
         searchAI();
       } else {
         search();
@@ -631,7 +642,6 @@ if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
     if (e.error === 'not-allowed') {
       alert("Microphone permission denied. Please allow mic access in your browser settings to use voice search.");
     } else if (e.error === 'no-speech') {
-      // Silently fail or show a small hint, don't alert for just no speech
       console.log("No speech detected.");
     } else if (e.error === 'network') {
       alert("Network error. Voice recognition requires an active internet connection.");
@@ -663,7 +673,7 @@ function resetPlaceholders() {
   }
 }
 
-function toggleVoiceSearch() {
+function toggleVoiceSearch(mode) {
   if (!recognition) {
     alert("Voice search is not supported in this browser. Please try Chrome or Edge.");
     return;
@@ -673,13 +683,17 @@ function toggleVoiceSearch() {
     if (isListening) {
       recognition.stop();
     } else {
-      // Ensure we have the latest language
+      // Determine mode: explicit arg > current visible box
+      if (mode) {
+        voiceModeTarget = mode;
+      } else {
+        voiceModeTarget = (searchBoxAi && searchBoxAi.style.display !== "none") ? "ai" : "search";
+      }
       recognition.lang = STT_LOCALES[currentLanguage] || "en-IN";
       recognition.start();
     }
   } catch (err) {
     console.error("Voice Toggle Error:", err);
-    // If it's already started, ignore. Otherwise reset state.
     if (err.name !== 'InvalidStateError') {
       isListening = false;
       updateMicUI();
@@ -777,11 +791,24 @@ function exitSearchMode() {
     // Don't exit if the active element is still inside the search box
     const box = document.getElementById('searchBoxStandard');
     if (box && box.contains(document.activeElement)) return;
-    // Don't exit if search input has text (keep clean mode while searching)
+    // Don't exit if search input has text
     if (searchInput && searchInput.value.trim()) return;
     isSearchFocused = false;
     if (box) box.classList.remove('search-focused');
   }, 150);
+}
+
+// Also hide camera/AI when user starts typing (Google-style)
+if (searchInput) {
+  searchInput.addEventListener('input', () => {
+    const box = document.getElementById('searchBoxStandard');
+    if (!box) return;
+    if (searchInput.value.trim()) {
+      box.classList.add('search-focused');
+    } else if (!isSearchFocused) {
+      box.classList.remove('search-focused');
+    }
+  });
 }
 
 
@@ -927,7 +954,6 @@ function handleLocationChoice(enabled) {
 let scannerStream = null;
 let scannerActive = false;
 let nutritionScanInProgress = false;
-
 async function startLiveScan() {
   const liveScanner = document.getElementById("liveScanner");
   const video = document.getElementById("scannerVideo");
@@ -941,11 +967,35 @@ async function startLiveScan() {
     liveScanner.style.display = "block";
     scannerActive = true;
     nutritionScanInProgress = false;
-    if (nutritionCaptureBtn) nutritionCaptureBtn.style.display = currentFilter === "nutrition" ? "inline-flex" : "none";
+
+    if (nutritionCaptureBtn) {
+      nutritionCaptureBtn.style.display = "inline-flex";
+      nutritionCaptureBtn.disabled = false;
+      if (currentFilter === "nutrition") {
+        nutritionCaptureBtn.innerHTML = `
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 8v8M8 12h8" />
+          </svg>
+          Analyze Food
+        `;
+        nutritionCaptureBtn.setAttribute("onclick", "captureLiveNutritionFrame()");
+      } else {
+        nutritionCaptureBtn.innerHTML = `
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 8v8M8 12h8" />
+          </svg>
+          Capture Photo
+        `;
+        nutritionCaptureBtn.setAttribute("onclick", "captureLivePhoto()");
+      }
+    }
+
     requestAnimationFrame(tick);
     status.innerHTML = currentFilter === "nutrition"
       ? "Frame the food item, then tap Analyze Food."
-      : "🔍 Looking for QR Code...";
+      : "🔍 Align QR Code in frame or tap Capture Photo below.";
   } catch (err) {
     alert("Camera Error: " + err.message);
   }
@@ -1044,6 +1094,56 @@ async function captureLiveNutritionFrame() {
     if (nutritionCaptureBtn) nutritionCaptureBtn.disabled = false;
     if (status) status.textContent = `Nutrition scan failed: ${e.message}`;
     if (scanStatus) scanStatus.textContent = `❌ Recognition Error: ${e.message}`;
+  }
+}
+
+async function captureLivePhoto() {
+  if (!scannerActive || nutritionScanInProgress) return;
+
+  const video = document.getElementById("scannerVideo");
+  const status = document.getElementById("liveScanStatus");
+  const nutritionCaptureBtn = document.getElementById("nutritionCaptureBtn");
+
+  if (!video || video.readyState < video.HAVE_CURRENT_DATA || !video.videoWidth || !video.videoHeight) {
+    if (status) status.textContent = "Camera is still getting ready. Try again in a moment.";
+    return;
+  }
+
+  nutritionScanInProgress = true;
+  if (nutritionCaptureBtn) nutritionCaptureBtn.disabled = true;
+  if (status) status.innerHTML = `<div class="dna-spinner"></div> Capturing & analyzing frame...`;
+
+  try {
+    const maxWidth = 800;
+    const ratio = Math.min(maxWidth / video.videoWidth, 1);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(video.videoWidth * ratio);
+    canvas.height = Math.round(video.videoHeight * ratio);
+    canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    canvas.toBlob(async (blob) => {
+      const file = new File([blob], "camera-capture.jpg", { type: "image/jpeg" });
+      stopLiveScan();
+      await triggerVisualSearch(file);
+    }, "image/jpeg", 0.8);
+  } catch (e) {
+    nutritionScanInProgress = false;
+    if (nutritionCaptureBtn) nutritionCaptureBtn.disabled = false;
+    if (status) status.textContent = `Capture failed: ${e.message}`;
+  }
+}
+
+function toggleAboutAccordion() {
+  const content = document.getElementById("aboutAccordionContent");
+  const container = document.querySelector(".setting-about-accordion");
+  if (content && container) {
+    if (content.style.display === "none") {
+      content.style.display = "block";
+      container.classList.add("active");
+    } else {
+      content.style.display = "none";
+      container.classList.remove("active");
+    }
   }
 }
 
@@ -1525,7 +1625,9 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
         output_lang: LANGUAGE_NAMES[targetLang] || "English",
         ai_mode: String(aiMode),
         advanced_mode: String(advancedMode),
-        history: aiMode ? JSON.stringify(chatHistory) : ""
+        history: aiMode ? JSON.stringify(chatHistory) : "",
+        limit: String(appSettings.resultsCount),
+        age_verified: String(appSettings.safeSearch === "off")
     });
     params.set("session_token", appState.guestId);
     
@@ -1648,6 +1750,14 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
     // Initialize the box with AI and Wiki
     aiSummaryBox.innerHTML = summaryHtml + wikiHtml;
 
+    // Auto-play voice if enabled and not in animated typing mode
+    if (data.ai_summary && pageNumber === 1 && !shouldAnimate && appSettings.autoPlayVoice) {
+      setTimeout(() => {
+        const ttsBtn = aiSummaryBox.querySelector('.tts-toggle-btn');
+        speakText(rawText, ttsBtn);
+      }, 500);
+    }
+
     // Trigger Animation if needed
     if (shouldAnimate) {
       const target = document.getElementById("streamingAI");
@@ -1677,6 +1787,11 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
                // After typing is done, push to history if not already there
                if (aiMode) {
                    chatHistory.push({ role: "assistant", content: rawText });
+               }
+               // Auto play speech if enabled
+               if (appSettings.autoPlayVoice) {
+                   const ttsBtn = document.querySelector('.tts-card-btn');
+                   speakText(rawText, ttsBtn);
                }
             }
            }
@@ -2533,7 +2648,7 @@ function getAboutOwnerToken() {
 
 async function loadAboutContent() {
   try {
-    const res = await fetch(`${activeApiBase}/about-content`);
+    const res = await fetchWithApiFallback('/about-content');
     const data = await res.json();
     renderAboutPublications(data.publications);
     renderAboutMedia(data.media);
@@ -2620,7 +2735,7 @@ async function handleAboutUpload(event, type) {
 
   try {
     const endpoint = type === 'publication' ? '/about-content/publication' : '/about-content/media';
-    const res = await fetch(`${activeApiBase}${endpoint}`, {
+    const res = await fetchWithApiFallback(endpoint, {
       method: "POST",
       body: formData
     });
@@ -2644,7 +2759,7 @@ async function deletePublication(pubId) {
   if (!confirm("Delete this research paper?")) return;
   try {
     const token = encodeURIComponent(getAboutOwnerToken());
-    const res = await fetch(`${activeApiBase}/about-content/publication/${pubId}?session_token=${token}`, {
+    const res = await fetchWithApiFallback(`/about-content/publication/${pubId}?session_token=${token}`, {
       method: "DELETE"
     });
     const data = await res.json();
@@ -2653,4 +2768,77 @@ async function deletePublication(pubId) {
   } catch (err) {
     alert(err.message);
   }
+}
+
+// ── Settings & Legal Modals Controller ──
+function openSettingsModal(e) {
+  if (e) e.preventDefault();
+  
+  // Load current settings into DOM inputs
+  const selectSafe = document.getElementById("settingsSafeSearch");
+  const selectCount = document.getElementById("settingsResultsCount");
+  const checkAutoPlay = document.getElementById("settingsAutoPlayVoice");
+  
+  if (selectSafe) selectSafe.value = appSettings.safeSearch;
+  if (selectCount) selectCount.value = String(appSettings.resultsCount);
+  if (checkAutoPlay) checkAutoPlay.checked = appSettings.autoPlayVoice;
+  
+  const modal = document.getElementById("settingsModal");
+  if (modal) modal.style.display = "flex";
+}
+
+function closeSettingsModal() {
+  const modal = document.getElementById("settingsModal");
+  if (modal) modal.style.display = "none";
+}
+
+function saveAndCloseSettings() {
+  const selectSafe = document.getElementById("settingsSafeSearch");
+  const selectCount = document.getElementById("settingsResultsCount");
+  const checkAutoPlay = document.getElementById("settingsAutoPlayVoice");
+  
+  if (selectSafe) {
+    appSettings.safeSearch = selectSafe.value;
+    localStorage.setItem("safeSearch", selectSafe.value);
+  }
+  if (selectCount) {
+    const countVal = parseInt(selectCount.value, 10) || 10;
+    appSettings.resultsCount = countVal;
+    localStorage.setItem("resultsCount", String(countVal));
+  }
+  if (checkAutoPlay) {
+    appSettings.autoPlayVoice = checkAutoPlay.checked;
+    localStorage.setItem("autoPlayVoice", String(checkAutoPlay.checked));
+  }
+  
+  closeSettingsModal();
+  alert("Settings saved successfully!");
+  
+  // Re-run search if there is an active search query to apply new settings
+  if (activeQuery) {
+    const isAiMode = searchBoxAi && searchBoxAi.style.display !== "none";
+    search(1, isAiMode, { replaceHistory: true });
+  }
+}
+
+function openTermsModal(e) {
+  if (e) e.preventDefault();
+  const modal = document.getElementById("termsModal");
+  if (modal) modal.style.display = "flex";
+}
+
+function closeTermsModal() {
+  const modal = document.getElementById("termsModal");
+  if (modal) modal.style.display = "none";
+}
+
+function openPrivacyModal(e) {
+  if (e) e.preventDefault();
+  const modal = document.getElementById("privacyModal");
+  if (modal) modal.style.display = "flex";
+}
+
+function closePrivacyModal() {
+  const modal = document.getElementById("privacyModal");
+  if (modal) modal.style.display = "none";
 }

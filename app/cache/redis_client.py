@@ -8,6 +8,7 @@
 
 import os
 import logging
+import time
 from typing import Any, Optional
 
 try:
@@ -21,6 +22,8 @@ class RedisClient:
     """Singleton Redis connection pool wrapper."""
 
     _client: Optional[Any] = None
+    _last_attempt_time: float = 0.0
+    _retry_delay: float = 30.0  # Avoid reconnecting on every request if down
 
     @classmethod
     def get_client(cls) -> Optional[Any]:
@@ -32,6 +35,11 @@ class RedisClient:
             return None
 
         if cls._client is None:
+            now = time.time()
+            if now - cls._last_attempt_time < cls._retry_delay:
+                return None
+            cls._last_attempt_time = now
+
             # First look for REDIS_URL in env directly, fallback to empty string
             url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
             try:

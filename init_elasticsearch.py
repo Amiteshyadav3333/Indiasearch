@@ -107,10 +107,11 @@ if __name__ == "__main__":
     
     try:
         # Test connection
-        if es.ping():
+        try:
+            es.info()
             print("✅ Connected to Elasticsearch!")
-        else:
-            print("❌ Failed to connect to Elasticsearch")
+        except Exception as e:
+            print(f"❌ Failed to connect to Elasticsearch: {e}")
             exit(1)
         
         # Create index

@@ -82,3 +82,144 @@
       </div>
     </div>
   </div>
+
+  <!-- ═══ SETTINGS MODAL ═══ -->
+  <div id="settingsModal" class="overlay-modal" style="display:none;" onclick="if(event.target===this)closeSettingsModal()">
+    <div class="modal-card settings-popup-card">
+      <div class="modal-header">
+        <h2>Settings</h2>
+        <button class="modal-x-btn" onclick="closeSettingsModal()">&times;</button>
+      </div>
+      <div class="settings-body" style="display: flex; flex-direction: column; gap: 20px;">
+        <div class="setting-group">
+          <label for="settingsSafeSearch" style="font-weight: 700; display: block; margin-bottom: 6px; color: var(--text-primary);">SafeSearch Filter</label>
+          <select id="settingsSafeSearch" style="width: 100%; height: 40px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary); padding: 0 10px;">
+            <option value="strict">Strict (Hide Adult Results)</option>
+            <option value="moderate">Moderate (Standard Filtering)</option>
+            <option value="off">Off (Show Adult Results)</option>
+          </select>
+        </div>
+        
+        <div class="setting-group">
+          <label for="settingsResultsCount" style="font-weight: 700; display: block; margin-bottom: 6px; color: var(--text-primary);">Search Results Count</label>
+          <select id="settingsResultsCount" style="width: 100%; height: 40px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary); padding: 0 10px;">
+            <option value="5">5 results per page</option>
+            <option value="10">10 results per page (Default)</option>
+            <option value="15">15 results per page</option>
+            <option value="20">20 results per page</option>
+          </select>
+        </div>
+
+        <div class="setting-group" style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+          <div>
+            <label for="settingsAutoPlayVoice" style="font-weight: 700; display: block; color: var(--text-primary);">Auto-play Voice Answers</label>
+            <span style="font-size: 12px; color: var(--text-secondary);">Automatically read out AI summaries.</span>
+          </div>
+          <input type="checkbox" id="settingsAutoPlayVoice" style="width: 20px; height: 20px; cursor: pointer;">
+        </div>
+
+        <div class="dropdown-sep"></div>
+
+        <div class="setting-group" style="display: flex; flex-direction: column; gap: 10px;">
+          <button onclick="clearHistoryUI()" class="btn-primary" style="background: var(--bg-alt); color: var(--text-primary); border: 1px solid var(--border); height: 38px; font-size: 13px;">Clear Search History</button>
+        </div>
+
+        <div class="dropdown-sep"></div>
+
+        <div style="display: flex; justify-content: space-between; font-size: 13px;">
+          <a href="#" onclick="openTermsModal(event)" style="color: var(--accent-blue); text-decoration: none; font-weight: 600;">Terms & Conditions</a>
+          <a href="#" onclick="openPrivacyModal(event)" style="color: var(--accent-blue); text-decoration: none; font-weight: 600;">Privacy Policy</a>
+        </div>
+
+        <div class="dropdown-sep"></div>
+
+        <!-- Collapsible About Section inside Settings -->
+        <div class="setting-about-accordion">
+          <button type="button" class="about-accordion-trigger" onclick="toggleAboutAccordion()">
+            <span>ℹ️ About IndiaSearch & Founder</span>
+            <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </button>
+          
+          <div id="aboutAccordionContent" class="about-accordion-content" style="display: none;">
+            <div class="about-content-inner">
+              <div class="founder-card-mini">
+                <img src="about-indiasearch.jpg" alt="Amitesh Kumar Yadav" class="founder-avatar-mini">
+                <div>
+                  <h4 class="founder-name">Amitesh Kumar Yadav</h4>
+                  <p class="founder-title">Founder & Developer</p>
+                </div>
+              </div>
+              <p class="about-bio-text">
+                Amitesh Kumar Yadav is a product builder focused on creating digital tools like <b>IndiaSearch</b>—an AI-powered multilingual search platform designed for Bharat: fast, voice-friendly, and supporting 22+ regional languages.
+              </p>
+              
+              <div class="about-links-grid">
+                <a href="https://www.linkedin.com/in/amitesh-kumar-yadav-b55b10293" target="_blank" class="about-btn-link linkedin">LinkedIn</a>
+                <a href="https://x.com/Amiteshyad7898" target="_blank" class="about-btn-link twitter">Twitter / X</a>
+                <a href="https://indiasearch.site" target="_blank" class="about-btn-link portfolio">Portfolio</a>
+              </div>
+              
+              <div class="about-projects-section">
+                <h5>Active Projects:</h5>
+                <a href="https://downloader.indiasearch.site" target="_blank" class="project-link-mini">🎥 Video Downloader Engine</a>
+                <a href="https://chat.indiasearch.site" target="_blank" class="project-link-mini">💬 IndiaSearch AI Chat</a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button onclick="saveAndCloseSettings()" class="btn-primary" style="margin-top: 10px;">Save Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ TERMS AND CONDITIONS MODAL ═══ -->
+  <div id="termsModal" class="overlay-modal" style="display:none;" onclick="if(event.target===this)closeTermsModal()">
+    <div class="modal-card legal-popup-card" style="max-width: 500px; max-height: 80vh; overflow-y: auto;">
+      <div class="modal-header">
+        <h2>Terms & Conditions</h2>
+        <button class="modal-x-btn" onclick="closeTermsModal()">&times;</button>
+      </div>
+      <div class="legal-body" style="font-size: 14px; line-height: 1.6; color: var(--text-secondary); display: flex; flex-direction: column; gap: 12px;">
+        <p>Welcome to <b>IndiaSearch</b>. By using our AI Voice Search Engine, you agree to these Terms and Conditions.</p>
+        
+        <h3 style="color: var(--text-primary); margin-top: 10px; font-size: 16px;">1. Usage Policy</h3>
+        <p>IndiaSearch is built to promote Indian local businesses, startups, education, and job discovery. Users are prohibited from using the platform for malicious scraping, automated spam queries, or distributing harmful content.</p>
+
+        <h3 style="color: var(--text-primary); margin-top: 10px; font-size: 16px;">2. AI Search Summaries</h3>
+        <p>AI-generated content and search summaries are synthesized from public web sources using LLM APIs. While we target high accuracy, users should cross-reference information for critical details (e.g., official government notices or job requirements).</p>
+
+        <h3 style="color: var(--text-primary); margin-top: 10px; font-size: 16px;">3. Geolocation & Local Search</h3>
+        <p>By enabling location permissions, you allow IndiaSearch to customize results (such as weather, local repair shops, and business details) based on your coordinates. Location data is processed on-the-fly and never sold.</p>
+
+        <p style="margin-top: 15px; font-size: 12px; color: var(--text-muted);">Last Updated: June 2026</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ PRIVACY POLICY MODAL ═══ -->
+  <div id="privacyModal" class="overlay-modal" style="display:none;" onclick="if(event.target===this)closePrivacyModal()">
+    <div class="modal-card legal-popup-card" style="max-width: 500px; max-height: 80vh; overflow-y: auto;">
+      <div class="modal-header">
+        <h2>Privacy Policy</h2>
+        <button class="modal-x-btn" onclick="closePrivacyModal()">&times;</button>
+      </div>
+      <div class="legal-body" style="font-size: 14px; line-height: 1.6; color: var(--text-secondary); display: flex; flex-direction: column; gap: 12px;">
+        <p>Your privacy is extremely important to us. Here is how <b>IndiaSearch</b> handles user data.</p>
+
+        <h3 style="color: var(--text-primary); margin-top: 10px; font-size: 16px;">1. Search Queries & Context</h3>
+        <p>Search history and query context are saved locally in your browser's storage (`localStorage`) to provide fast history access. Logged-in sessions save history in our secure database to sync between your devices. You can clear this anytime from Settings.</p>
+
+        <h3 style="color: var(--text-primary); margin-top: 10px; font-size: 16px;">2. Geolocation Access</h3>
+        <p>We ask for geolocation to find repair shops (Jugaad intent), job positions, and weather details nearby. If coordinates are shared, they are rounded to 2 decimal places (approx. 1km accuracy) for cache consistency and privacy safety.</p>
+
+        <h3 style="color: var(--text-primary); margin-top: 10px; font-size: 16px;">3. External API Sharing</h3>
+        <p>When using AI Mode ("Ask AI") or Nutrition Scan, queries or compressed images are sent to AI API providers (Google Gemini or Groq) to generate summaries or identify food details. No personally identifiable details are sent.</p>
+
+        <p style="margin-top: 15px; font-size: 12px; color: var(--text-muted);">Last Updated: June 2026</p>
+      </div>
+    </div>
+  </div>
+
