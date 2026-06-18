@@ -3,6 +3,12 @@ import aiohttp
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urldefrag, urlparse
 import re
+import os
+
+from app.models.crawled_site import save_crawled_site, init_crawled_db
+
+# Initialize DB
+init_crawled_db()
 
 try:
     from app.services.index_service import index_document_sync as index_document
@@ -11,6 +17,19 @@ except ImportError:
         from indexer import index_document_sync as index_document
     except ImportError:
         from Indiasearch.indexer import index_document_sync as index_document
+
+try:
+    from groq import Groq
+except ImportError:
+    Groq = None
+
+GROQ_CLIENT = None
+groq_api_key = os.getenv("GROQ_API_KEY") or os.getenv("Grok_api_key")
+if groq_api_key:
+    try:
+        GROQ_CLIENT = Groq(api_key=groq_api_key)
+    except:
+        pass
 
 class Crawler:
     def __init__(self, max_pages=300, max_depth=2, max_concurrency=15, timeout=7):
@@ -46,6 +65,36 @@ class Crawler:
     @staticmethod
     def clean_text(text):
         return re.sub(r"\s+", " ", text).strip()
+
+    def truncate_to_100_words(self, text: str) -> str:
+        """Truncate text to approximately 100 words."""
+        if not text:
+            return ""
+        words = text.split()[:100]
+        return " ".join(words)
+
+    async def generate_100_word_summary(self, title: str, content: str) -> str:
+        """Generate 100-word summary using Groq AI."""
+        if not GROQ_CLIENT:
+            return self.truncate_to_100_words(content)
+        
+        try:
+            prompt = f"""Summarize this webpage in exactly 100 words. Be concise and informative.
+
+Title: {title}
+
+Content: {content[:2000]}
+
+Summary (exactly 100 words):"""
+            completion = GROQ_CLIENT.chat.completions.create(
+                messages=[{"role": "user", "content": prompt}],
+                model="llama-3.3-70b-versatile",
+                max_tokens=150
+            )
+            return completion.choices[0].message.content.strip()
+        except Exception as e:
+            print(f"[AI Summary Error]: {e}")
+            return self.truncate_to_100_words(content)
 
     async def fetch_page(self, url, session):
         try:
@@ -89,7 +138,13 @@ class Crawler:
                 soup = BeautifulSoup(html, "html.parser")
                 title = soup.title.string.strip() if soup.title else "No Title"
                 content = self.clean_text(soup.get_text(" "))
-
+                
+                # Generate 100-word summary
+                summary_100 = await self.generate_100_word_summary(title, content)
+                
+                # Store in PostgreSQL database
+                save_crawled_site(url, title, summary_100, content[:50000])
+                
                 # Blocking ES call inside thread
                 await asyncio.to_thread(index_document, url, title, content)
 

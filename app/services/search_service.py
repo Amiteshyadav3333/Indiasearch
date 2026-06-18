@@ -3,6 +3,8 @@ import asyncio
 import re
 from urllib.parse import quote
 
+from app.models.crawled_site import search_crawled_sites
+
 try:
     from duckduckgo_search import DDGS
 except ImportError:
@@ -210,6 +212,24 @@ async def search_query(es: Elasticsearch, index: str, query: str, page: int = 1)
     size = 10
     from_ = (page - 1) * size
 
+    # 0. First, search in PostgreSQL database (crawled sites with 100-word summaries)
+    try:
+        db_results = search_crawled_sites(query, limit=20)
+        if db_results:
+            for r in db_results[from_:from_ + size]:
+                results.append({
+                    "title": r.title,
+                    "url": r.url,
+                    "snippet": r.content_100_words or "",
+                    "score": 2.0,  # Higher priority for crawled content
+                    "source": "crawled_database"
+                })
+            total_hits = len(db_results)
+            if results:
+                return results, total_hits
+    except Exception as e:
+        print(f"DB Search Error: {e}")
+
     # 1. Try Elasticsearch
     try:
         if es.ping(): # Check connection first
@@ -247,7 +267,8 @@ async def search_query(es: Elasticsearch, index: str, query: str, page: int = 1)
                     "title": title,
                     "url": url,
                     "snippet": snippet,
-                    "score": hit["_score"]
+                    "score": hit["_score"],
+                    "source": "elasticsearch"
                 })
     except Exception as e:
         print(f"ES Search Error (falling back to local): {e}")
@@ -273,7 +294,8 @@ async def search_query(es: Elasticsearch, index: str, query: str, page: int = 1)
                     "title": r.get('title', 'Global Result'),
                     "url": r.get('href', ''),
                     "snippet": r.get('body', ''),
-                    "score": 1.0
+                    "score": 1.0,
+                    "source": "duckduckgo"
                 })
             
             # Simulated large hitpool for frontend pagination calculation

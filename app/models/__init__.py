@@ -11,3 +11,6 @@
 
 # from flask_sqlalchemy import SQLAlchemy
 # db = SQLAlchemy()
+
+from app.models.crawled_site import init_crawled_db, save_crawled_site, search_crawled_sites
+init_crawled_db()

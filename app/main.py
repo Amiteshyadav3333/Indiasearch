@@ -36,6 +36,7 @@ from app.services.crawler_service import Crawler, SEED_URLS
 from app.cache import hot_query_store
 from app.api import nutrition
 from app.models import about_content
+from app.services.ai_service import generate_google_style_ai_answer
 
 # --- Logging Setup ---
 logging.basicConfig(
@@ -478,6 +479,65 @@ async def delete_med(media_id: int, session_token: str):
         return JSONResponse({"error": "Admin access required"}, 403)
     about_content.delete_media(media_id)
     return {"message": "Deleted"}
+
+# --- AI Mode Endpoint (Google-style AI answers) ---
+@app.get("/ai-mode")
+async def ai_mode_search(q: str, lang: str = "en"):
+    """
+    Google-style AI Mode: Returns AI-generated answer with sources and images.
+    """
+    try:
+        from app.services.search_service import search_query
+        from app.integrations.elastic_client import ElasticClient
+        
+        es = ElasticClient.get_client()
+        if not es:
+            return JSONResponse({"error": "Search engine unavailable"}, 503)
+        
+        results, _ = await search_query(es, "indiasearch", q, page=1)
+        
+        if not results:
+            return {
+                "answer": "I couldn't find relevant information. Try a different query.",
+                "sources": [],
+                "images": []
+            }
+        
+        # Generate Google-style AI answer
+        answer = generate_google_style_ai_answer(q, results, lang)
+        
+        # Format sources with images
+        sources = []
+        images = []
+        for i, r in enumerate(results[:8], 1):
+            title = r.get('title', '')
+            url = r.get('url', '')
+            snippet = r.get('snippet', '')
+            
+            sources.append({
+                "id": i,
+                "title": title,
+                "url": url,
+                "snippet": snippet[:150]
+            })
+            
+            # For images, try to get from content or generate placeholder
+            images.append({
+                "id": i,
+                "title": title,
+                "url": url,
+                "image_url": f"https://www.google.com/s2/favicons?domain={url.split('/')[2] if '/' in url else url}&sz=128"
+            })
+        
+        return {
+            "answer": answer,
+            "sources": sources,
+            "images": images,
+            "query": q
+        }
+    except Exception as e:
+        logger.error(f"[AI Mode] Error: {e}")
+        return JSONResponse({"error": "AI mode temporarily unavailable"}, 500)
 
 # Explicit routes for favicon and SEO files (must be BEFORE StaticFiles mount)
 @app.get("/favicon.ico", include_in_schema=False)

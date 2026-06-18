@@ -1536,7 +1536,6 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
   let query = searchInput ? searchInput.value.trim() : "";
   stopSpeechPlayback();
   
-  // If no query in input, keep the current query for pagination/filter changes.
   if (!query && activeQuery) {
     query = activeQuery;
     if (searchInput) searchInput.value = query;
@@ -1547,22 +1546,16 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
     return;
   }
 
-  // Update activeQuery on new search
   activeQuery = query;
-
-  // Show clear button for current search text
   updateClearBtn();
-
   closeAutocomplete();
 
-  // Transition to search state
   if (heroSection) heroSection.classList.add("hidden");
   if (searchFiltersDiv) searchFiltersDiv.style.display = "flex";
   if (trendingContainer) trendingContainer.style.display = "none";
   if (historyBox) historyBox.style.display = "none";
   if (aboutSection) aboutSection.style.display = "none";
 
-  // Explicitly maintain search box visibility based on mode
   if (aiMode) {
       if (searchBoxStandard) searchBoxStandard.style.display = "none";
       if (searchBoxAi) searchBoxAi.style.display = "flex";
@@ -1577,17 +1570,6 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
   applyFilterActiveState(currentFilter);
   if (!skipHistory) {
     writeBrowserSearchState({ query, page: pageNumber, filter: currentFilter, aiMode }, replaceHistory);
-  }
-
-  // ── Advanced Mode Location Check ──
-  if (advancedMode && !appState.location && !appState.locationChoiceMade) {
-      const modal = document.getElementById("locationPopup");
-      if (modal) {
-          modal.style.display = "flex";
-          // Stop the search here, wait for user choice
-          resultsBox.innerHTML = "";
-          return;
-      }
   }
 
   const targetLang = currentLanguage || languageSelect.value || "en";
@@ -1617,6 +1599,40 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
     }
 
     document.documentElement.setAttribute("data-ai-mode", aiMode ? "true" : "false");
+    
+    // Use new /ai-mode endpoint for true AI mode
+    if (aiMode) {
+      const aiRes = await fetchWithApiFallback(`/ai-mode?q=${encodeURIComponent(query)}&lang=${targetLang}`);
+      const aiData = await aiRes.json();
+      
+      if (aiData.answer) {
+        // Render Google-style AI answer with sources
+        const googleStyleHtml = renderGoogleStyleAIMode(aiData);
+        aiSummaryBox.innerHTML = googleStyleHtml;
+        resultsBox.innerHTML = "";
+        if (paginationContainer) paginationContainer.innerHTML = "";
+        
+        // Auto play voice if enabled
+        if (appSettings.autoPlayVoice) {
+          setTimeout(() => {
+            const ttsBtn = aiSummaryBox.querySelector('.tts-toggle-btn');
+            speakText(aiData.answer, ttsBtn);
+          }, 500);
+        }
+        
+        // Update chat history
+        chatHistory.push({ role: "assistant", content: aiData.answer });
+        
+        if (searchInput) searchInput.value = query;
+        if (aiSearchInput) {
+          aiSearchInput.value = "";
+          aiSearchInput.style.height = "auto";
+        }
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
+    }
+
     const params = new URLSearchParams({ 
         q: query, 
         page: String(pageNumber), 
@@ -2291,7 +2307,6 @@ function renderStockPanel(s) {
 function renderNutritionPanel(n) {
     if (!n) return "";
     
-    // Support both old and new schema
     const name = n.name || n.food_name || "Food Item";
     const desc = n.description || "";
     const cals = n.calories || "N/A";
@@ -2383,6 +2398,101 @@ function renderNutritionPanel(n) {
             💡 <b>Expert AI Tip:</b> ${tip}
         </div>` : ""}
       </div>`;
+}
+
+// ═══════════════════════════════════════════
+// GOOGLE-STYLE AI MODE RENDERER
+// ═══════════════════════════════════════════
+function renderGoogleStyleAIMode(data) {
+    if (!data || !data.answer) return "";
+    
+    const query = data.query || "";
+    const answer = data.answer;
+    const sources = data.sources || [];
+    const images = data.images || [];
+    
+    // Render sources as Google-style cards with thumbnails
+    const sourcesHtml = sources.map((src, idx) => {
+        const displayNum = idx + 1;
+        const url = src.url || "#";
+        const title = src.title || "Source";
+        const snippet = src.snippet || "";
+        
+        // Get domain for display
+        let domain = "source";
+        try {
+            domain = new URL(url).hostname.replace(/^www\./, "");
+        } catch(e) {}
+        
+        // Get favicon
+        const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+        
+        return `
+          <div class="google-source-card" onclick="window.open('${url}', '_blank')" style="cursor:pointer;">
+            <div class="google-source-num">${displayNum}</div>
+            <div class="google-source-content">
+              <div class="google-source-header">
+                <img src="${faviconUrl}" alt="" class="google-source-favicon" onerror="this.style.display='none'">
+                <span class="google-source-domain">${domain}</span>
+              </div>
+              <h4 class="google-source-title">${escapeHtml(title)}</h4>
+              <p class="google-source-snippet">${escapeHtml(snippet)}</p>
+            </div>
+          </div>
+        `;
+    }).join("");
+    
+    // Render images grid
+    let imagesHtml = "";
+    if (images && images.length > 0) {
+        imagesHtml = `
+          <div class="google-images-grid">
+            ${images.slice(0, 6).map((img, idx) => `
+              <div class="google-image-item" onclick="window.open('${img.url}', '_blank')" style="cursor:pointer;">
+                <img src="${img.image_url}" alt="${escapeHtml(img.title)}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22><rect width=%22100%22 height=%22100%22 fill=%22%23f0f0f0%22/><text x=%2250%22 y=%2255%22 text-anchor=%22middle%22 font-size=%2212%22>${idx + 1}</text></svg>'">
+              </div>
+            `).join("")}
+          </div>
+        `;
+    }
+    
+    return `
+      <div class="google-ai-container" style="max-width:800px; margin:0 auto; padding:20px;">
+        <!-- AI Answer Section -->
+        <div class="google-ai-answer" style="background:var(--bg-card); border-radius:24px; padding:28px; margin-bottom:24px; border:1px solid var(--border); box-shadow:0 4px 20px rgba(0,0,0,0.08);">
+          <div class="google-query-header" style="display:flex; align-items:center; gap:12px; margin-bottom:16px; padding-bottom:16px; border-bottom:1px solid var(--border);">
+            <div class="google-query-icon" style="width:36px; height:36px; background:linear-gradient(135deg, #4285f4, #34a853); border-radius:50%; display:flex; align-items:center; justify-content:center;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            </div>
+            <span class="google-query-text" style="font-size:18px; font-weight:600; color:var(--text-primary);">${escapeHtml(query)}</span>
+            ${renderVoiceButton("Listen to answer", "tts-card-btn")}
+          </div>
+          <div class="google-answer-body" style="font-size:16px; line-height:1.7; color:var(--text-primary);">
+            ${renderMarkdownWithCitations(answer, sources)}
+          </div>
+        </div>
+        
+        <!-- Related Images -->
+        ${imagesHtml ? `<div class="google-images-section" style="margin-bottom:24px;">
+          <div class="section-label" style="font-size:12px; font-weight:700; color:var(--text-muted); margin-bottom:12px; text-transform:uppercase; letter-spacing:1px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            Related Images
+          </div>
+          ${imagesHtml}
+        </div>` : ''}
+        
+        <!-- Sources Section -->
+        <div class="google-sources-section">
+          <div class="section-label" style="font-size:12px; font-weight:700; color:var(--text-muted); margin-bottom:12px; text-transform:uppercase; letter-spacing:1px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            Sources
+          </div>
+          <div class="google-sources-grid" style="display:grid; grid-template-columns: repeat(2, 1fr); gap:12px;">
+            ${sourcesHtml}
+          </div>
+        </div>
+      </div>
+    `;
 }
 
 function renderSportsPanel(matches) {

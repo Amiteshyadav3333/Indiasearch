@@ -1,6 +1,6 @@
 import os
 import re
-import groq
+from groq import Groq
 from dotenv import load_dotenv
 from app.utils import translator
 
@@ -12,9 +12,8 @@ except ImportError:
 
 load_dotenv()
 
-# --- Engines Initialization ---
 groq_api_key = os.getenv("GROQ_API_KEY") or os.getenv("Grok_api_key")
-groq_client = groq.Groq(api_key=groq_api_key, timeout=12.0) if groq_api_key else None
+groq_client = Groq(api_key=groq_api_key, timeout=12.0) if groq_api_key else None
 
 gemini_api_key = os.getenv("GEMINI_API_KEY")
 if gemini_api_key and genai:
@@ -37,7 +36,6 @@ def _gemini_generate_content(contents):
     return gemini_client.generate_content(contents)
 
 def groq_vision_identify(image_b64):
-    """Fallback vision identify using Groq"""
     if not groq_client: return None
     try:
         completion = groq_client.chat.completions.create(
@@ -114,9 +112,7 @@ def _language_name_to_code(name="English"):
 def gemini_chat(query, docs, lang="English", pdf_content=None, intent="general", history=None):
     if not gemini_client: return None
 
-    # Combine context
     context = _source_context(docs)
-
     pdf_info = f"\n--- CORE DOCUMENT CONTENT ---\n{pdf_content}\n" if pdf_content else ""
 
     if intent == "nutrition":
@@ -140,7 +136,6 @@ def gemini_chat(query, docs, lang="English", pdf_content=None, intent="general",
         - Motto: Built with love in India.
         """
 
-    # Build prompt with history
     full_prompt = f"{system_msg}\n\n"
     if history:
         for msg in history:
@@ -159,7 +154,6 @@ def groq_chat(query, docs, lang="English", pdf_content=None, intent="general", h
     if not groq_client: return None
     
     context = _source_context(docs)
-
     pdf_info = f"\n--- CORE DOCUMENT CONTENT ---\n{pdf_content}\n" if pdf_content else ""
     
     if intent == "nutrition":
@@ -194,13 +188,65 @@ def groq_chat(query, docs, lang="English", pdf_content=None, intent="general", h
         return None
 
 def generate_ai_summary(query, docs, ai_mode=False, lang="English", pdf_content=None, intent="general", history=None):
-    # PRIORITIZE GEMINI for Advanced and Nutrition as requested
     if intent == "nutrition" or ai_mode:
         res = gemini_chat(query, docs, lang, pdf_content, intent, history)
         if res: return res
     
-    # Fallback to Groq, then a deterministic source-based answer so Ask AI never dead-ends.
     return (
         groq_chat(query, docs, lang, pdf_content, intent, history)
         or _extractive_summary(query, docs, lang, advanced=(intent == "advanced"))
     )
+
+
+def generate_google_style_ai_answer(query: str, docs: list, lang: str = "English") -> str:
+    """Generate Google-like AI answer with sources at the bottom."""
+    if not docs:
+        return "I couldn't find relevant information for your query. Please try a different search."
+    
+    context_parts = []
+    for i, doc in enumerate(docs[:5], 1):
+        title = doc.get('title', '')
+        content = doc.get('snippet', '') or doc.get('content', '')
+        url = doc.get('url', '')
+        context_parts.append(f"[Source {i}] Title: {title}\nURL: {url}\nContent: {content[:300]}")
+    
+    context = "\n\n".join(context_parts)
+    
+    prompt = f"""You are a Google-like AI assistant. Answer the user's query based on the sources below.
+
+USER QUERY: {query}
+
+SOURCES:
+{context}
+
+INSTRUCTIONS:
+1. Provide a direct, comprehensive answer to the query
+2. If the sources don't contain enough information, say so honestly
+3. Cite sources using numbered brackets [1], [2], etc.
+4. Format your answer like Google AI Overview / Perplexity
+5. Use markdown for readability
+6. Keep answer concise but complete (3-4 paragraphs max)
+7. End with "Sources:" list showing URLs
+
+ANSWER:"""
+    
+    if gemini_client:
+        try:
+            response = _gemini_generate_content(prompt)
+            if response and response.text:
+                return response.text
+        except Exception as e:
+            print(f"[Google AI Mode] Gemini error: {e}")
+    
+    if groq_client:
+        try:
+            completion = groq_client.chat.completions.create(
+                messages=[{"role": "user", "content": prompt}],
+                model="llama-3.3-70b-versatile"
+            )
+            if completion.choices[0].message.content:
+                return completion.choices[0].message.content
+        except Exception as e:
+            print(f"[Google AI Mode] Groq error: {e}")
+    
+    return _extractive_summary(query, docs, lang, advanced=True)
