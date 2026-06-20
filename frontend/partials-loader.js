@@ -15,7 +15,7 @@ async function loadHtmlPartials() {
 
 function loadMainApp() {
   const script = document.createElement('script');
-  script.src = 'app.js?v=clear-btn-2';
+  script.src = 'app.js?v=fix-enter-search-mode';
   document.body.appendChild(script);
 }
 

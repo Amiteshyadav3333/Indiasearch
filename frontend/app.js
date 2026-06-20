@@ -783,6 +783,8 @@ function enterSearchMode() {
   isSearchFocused = true;
   const box = document.getElementById('searchBoxStandard');
   if (box) box.classList.add('search-focused');
+  // Also show trending suggestions panel
+  if (trendingContainer) trendingContainer.style.display = "block";
 }
 
 function exitSearchMode() {
@@ -795,6 +797,8 @@ function exitSearchMode() {
     if (searchInput && searchInput.value.trim()) return;
     isSearchFocused = false;
     if (box) box.classList.remove('search-focused');
+    // Also hide trending suggestions panel
+    if (trendingContainer) trendingContainer.style.display = "none";
   }, 150);
 }
 
@@ -2092,37 +2096,38 @@ function renderPagination(totalHits, currentPage) {
 const autocompleteDropdown = document.getElementById("autocompleteDropdown");
 const searchBox = document.querySelector(".search-box");
 
-function enterSearchMode() {
-    if (trendingContainer) trendingContainer.style.display = "block";
+// NOTE: enterSearchMode / exitSearchMode are defined earlier (line ~782) and
+// already handle both the search-focused CSS class and the trending panel.
+// Do NOT redefine them here.
+
+if (searchInput) {
+  searchInput.addEventListener("input", e => {
+    const val = e.target.value.trim().toLowerCase();
+    if (!val) { closeAutocomplete(); return; }
+
+    const db = [...new Set([...searchHistory, ...TRENDING_KEYWORDS, "sarkari result", "latest news india", "ind vs pak", "tech jobs bangalore"])];
+    const matches = db.filter(item => item.toLowerCase().includes(val)).slice(0, 6);
+
+    if (matches.length > 0) {
+      autocompleteDropdown.innerHTML = matches.map(m => {
+        const bolded = m.replace(new RegExp(`(${val})`, "gi"), "<strong>$1</strong>");
+        return `<div class="autocomplete-item" onclick="searchInput.value='${m.replace(/'/g, "\\'")}'; closeAutocomplete(); search(1);">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <span>${bolded}</span>
+        </div>`;
+      }).join("");
+      autocompleteDropdown.style.display = "block";
+      if (searchBox) searchBox.classList.add("has-suggestions");
+    } else {
+      closeAutocomplete();
+    }
+  });
+
+  searchInput.addEventListener("keyup", e => {
+    if (e.key === "Enter") { closeAutocomplete(); search(1, false); }
+    else if (!searchInput.value.trim()) resetToHome();
+  });
 }
-
-function exitSearchMode() {
-    setTimeout(() => {
-        if (trendingContainer) trendingContainer.style.display = "none";
-    }, 200);
-}
-
-searchInput.addEventListener("input", e => {
-  const val = e.target.value.trim().toLowerCase();
-  if (!val) { closeAutocomplete(); return; }
-
-  const db = [...new Set([...searchHistory, ...TRENDING_KEYWORDS, "sarkari result", "latest news india", "ind vs pak", "tech jobs bangalore"])];
-  const matches = db.filter(item => item.toLowerCase().includes(val)).slice(0, 6);
-
-  if (matches.length > 0) {
-    autocompleteDropdown.innerHTML = matches.map(m => {
-      const bolded = m.replace(new RegExp(`(${val})`, "gi"), "<strong>$1</strong>");
-      return `<div class="autocomplete-item" onclick="searchInput.value='${m.replace(/'/g, "\\'")}'; closeAutocomplete(); search(1);">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <span>${bolded}</span>
-      </div>`;
-    }).join("");
-    autocompleteDropdown.style.display = "block";
-    searchBox.classList.add("has-suggestions");
-  } else {
-    closeAutocomplete();
-  }
-});
 
 function closeAutocomplete() {
   if (autocompleteDropdown) { autocompleteDropdown.innerHTML = ""; autocompleteDropdown.style.display = "none"; }
@@ -2130,11 +2135,6 @@ function closeAutocomplete() {
 }
 
 document.addEventListener("click", e => { if (searchBox && !searchBox.contains(e.target)) closeAutocomplete(); });
-
-searchInput.addEventListener("keyup", e => {
-  if (e.key === "Enter") { closeAutocomplete(); search(1, false); }
-  else if (!searchInput.value.trim()) resetToHome();
-});
 
 window.addEventListener("popstate", async (event) => {
   restoringBrowserState = true;
