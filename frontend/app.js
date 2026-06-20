@@ -1589,7 +1589,28 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
           <div class="skel skel-text skel-text-short"></div>
         </div>`).join("")}
     </div>`;
-  aiSummaryBox.innerHTML = "";
+
+  // Google AI Overview skeleton when in AI mode
+  if (aiMode) {
+    aiSummaryBox.innerHTML = `
+      <div class="gai-skeleton">
+        <div class="gai-sk-header">
+          <div class="gai-sk-icon"></div>
+          <div class="gai-sk-title"></div>
+        </div>
+        <div class="gai-sk-line" style="width:95%"></div>
+        <div class="gai-sk-line" style="width:88%"></div>
+        <div class="gai-sk-line" style="width:92%"></div>
+        <div class="gai-sk-line" style="width:75%"></div>
+        <div class="gai-sk-sources">
+          <div class="gai-sk-pill"></div>
+          <div class="gai-sk-pill"></div>
+          <div class="gai-sk-pill"></div>
+        </div>
+      </div>`;
+  } else {
+    aiSummaryBox.innerHTML = "";
+  }
 
   try {
     if (currentFilter === "nutrition" && pageNumber === 1) {
@@ -2405,94 +2426,113 @@ function renderNutritionPanel(n) {
 // ═══════════════════════════════════════════
 function renderGoogleStyleAIMode(data) {
     if (!data || !data.answer) return "";
-    
+
     const query = data.query || "";
-    const answer = data.answer;
+    const answer = data.answer || "";
     const sources = data.sources || [];
-    const images = data.images || [];
-    
-    // Render sources as Google-style cards with thumbnails
-    const sourcesHtml = sources.map((src, idx) => {
-        const displayNum = idx + 1;
-        const url = src.url || "#";
-        const title = src.title || "Source";
-        const snippet = src.snippet || "";
-        
-        // Get domain for display
+
+    // ── Source pills row (Google-style horizontal scroller) ──
+    const pillsHtml = sources.slice(0, 8).map((src, idx) => {
         let domain = "source";
-        try {
-            domain = new URL(url).hostname.replace(/^www\./, "");
-        } catch(e) {}
-        
-        // Get favicon
+        try { domain = new URL(src.url || "").hostname.replace(/^www\./, ""); } catch(e) {}
         const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
-        
-        return `
-          <div class="google-source-card" onclick="window.open('${url}', '_blank')" style="cursor:pointer;">
-            <div class="google-source-num">${displayNum}</div>
-            <div class="google-source-content">
-              <div class="google-source-header">
-                <img src="${faviconUrl}" alt="" class="google-source-favicon" onerror="this.style.display='none'">
-                <span class="google-source-domain">${domain}</span>
-              </div>
-              <h4 class="google-source-title">${escapeHtml(title)}</h4>
-              <p class="google-source-snippet">${escapeHtml(snippet)}</p>
-            </div>
-          </div>
-        `;
+        return `<a href="${src.url || '#'}" target="_blank" rel="noopener" class="gai-pill" title="${escapeHtml(src.title || domain)}">
+          <img src="${faviconUrl}" class="gai-pill-fav" onerror="this.style.display='none'" alt="">
+          <span>${escapeHtml(domain)}</span>
+          <span class="gai-pill-num">${idx + 1}</span>
+        </a>`;
     }).join("");
-    
-    // Render images grid
-    let imagesHtml = "";
-    if (images && images.length > 0) {
-        imagesHtml = `
-          <div class="google-images-grid">
-            ${images.slice(0, 6).map((img, idx) => `
-              <div class="google-image-item" onclick="window.open('${img.url}', '_blank')" style="cursor:pointer;">
-                <img src="${img.image_url}" alt="${escapeHtml(img.title)}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22><rect width=%22100%22 height=%22100%22 fill=%22%23f0f0f0%22/><text x=%2250%22 y=%2255%22 text-anchor=%22middle%22 font-size=%2212%22>${idx + 1}</text></svg>'">
-              </div>
-            `).join("")}
-          </div>
-        `;
-    }
-    
-    return `
-      <div class="google-ai-container" style="max-width:800px; margin:0 auto; padding:20px;">
-        <!-- AI Answer Section -->
-        <div class="google-ai-answer" style="background:var(--bg-card); border-radius:24px; padding:28px; margin-bottom:24px; border:1px solid var(--border); box-shadow:0 4px 20px rgba(0,0,0,0.08);">
-          <div class="google-query-header" style="display:flex; align-items:center; gap:12px; margin-bottom:16px; padding-bottom:16px; border-bottom:1px solid var(--border);">
-            <div class="google-query-icon" style="width:36px; height:36px; background:linear-gradient(135deg, #4285f4, #34a853); border-radius:50%; display:flex; align-items:center; justify-content:center;">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+
+    // ── Source cards grid ──
+    const cardsHtml = sources.slice(0, 6).map((src, idx) => {
+        let domain = "source";
+        try { domain = new URL(src.url || "").hostname.replace(/^www\./, ""); } catch(e) {}
+        const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+        const snippet = (src.snippet || "").slice(0, 120);
+        return `
+          <a href="${src.url || '#'}" target="_blank" rel="noopener" class="gai-src-card">
+            <div class="gai-src-top">
+              <img src="${faviconUrl}" class="gai-src-fav" onerror="this.style.display='none'" alt="">
+              <span class="gai-src-domain">${escapeHtml(domain)}</span>
+              <span class="gai-src-badge">${idx + 1}</span>
             </div>
-            <span class="google-query-text" style="font-size:18px; font-weight:600; color:var(--text-primary);">${escapeHtml(query)}</span>
-            ${renderVoiceButton("Listen to answer", "tts-card-btn")}
-          </div>
-          <div class="google-answer-body" style="font-size:16px; line-height:1.7; color:var(--text-primary);">
-            ${renderMarkdownWithCitations(answer, sources)}
-          </div>
+            <div class="gai-src-title">${escapeHtml((src.title || domain).slice(0, 70))}</div>
+            ${snippet ? `<div class="gai-src-snippet">${escapeHtml(snippet)}</div>` : ''}
+          </a>`;
+    }).join("");
+
+    // ── Rendered answer with citations ──
+    const answeredHtml = renderMarkdownWithCitations(answer, sources);
+
+    // ── Unique ID for animation ──
+    const uid = `gai_${Date.now()}`;
+
+    const html = `
+    <div class="gai-overview" id="${uid}">
+
+      <!-- ── Header bar ── -->
+      <div class="gai-header">
+        <div class="gai-header-left">
+          <span class="gai-sparkle" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+              <defs>
+                <linearGradient id="sp_${uid}" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#FF6B35"/>
+                  <stop offset="50%" stop-color="#f77c1f"/>
+                  <stop offset="100%" stop-color="#ff9a3c"/>
+                </linearGradient>
+              </defs>
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" fill="url(#sp_${uid})"/>
+            </svg>
+          </span>
+          <span class="gai-header-title">AI Overview</span>
+          <span class="gai-powered">by IndiaSearch AI</span>
         </div>
-        
-        <!-- Related Images -->
-        ${imagesHtml ? `<div class="google-images-section" style="margin-bottom:24px;">
-          <div class="section-label" style="font-size:12px; font-weight:700; color:var(--text-muted); margin-bottom:12px; text-transform:uppercase; letter-spacing:1px;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-            Related Images
-          </div>
-          ${imagesHtml}
-        </div>` : ''}
-        
-        <!-- Sources Section -->
-        <div class="google-sources-section">
-          <div class="section-label" style="font-size:12px; font-weight:700; color:var(--text-muted); margin-bottom:12px; text-transform:uppercase; letter-spacing:1px;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            Sources
-          </div>
-          <div class="google-sources-grid" style="display:grid; grid-template-columns: repeat(2, 1fr); gap:12px;">
-            ${sourcesHtml}
-          </div>
+        <div class="gai-header-right">
+          ${renderVoiceButton("Listen", "tts-toggle-btn gai-tts-btn")}
         </div>
       </div>
-    `;
+
+      <!-- ── Source pills (top, like Google) ── -->
+      ${pillsHtml ? `<div class="gai-pills-row">${pillsHtml}</div>` : ''}
+
+      <!-- ── Main answer body ── -->
+      <div class="gai-body" id="${uid}_body">
+        <div class="gai-answer-text">${answeredHtml}</div>
+      </div>
+
+      <!-- ── Divider ── -->
+      <div class="gai-divider"></div>
+
+      <!-- ── Sources grid ── -->
+      ${cardsHtml ? `
+        <div class="gai-src-header">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+          Sources
+        </div>
+        <div class="gai-src-grid">${cardsHtml}</div>
+      ` : ''}
+
+      <!-- ── Footer ── -->
+      <div class="gai-footer">
+        <span>AI answers may contain errors. Verify with sources.</span>
+        <button class="gai-feedback-btn" onclick="void 0" title="Send feedback">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          Feedback
+        </button>
+      </div>
+    </div>`;
+
+    // Trigger fade-in after render
+    setTimeout(() => {
+        const el = document.getElementById(uid);
+        if (el) el.classList.add('gai-visible');
+    }, 50);
+
+    return html;
 }
 
 function renderSportsPanel(matches) {
