@@ -277,4 +277,45 @@
 
     <!-- ═══ PAGINATION ═══ -->
     <div id="pagination" class="pagination-wrap"></div>
+
+    <!-- ═══ GOOGLE AI MODE PANEL ═══ -->
+    <div id="aiModePanel" class="ai-panel" style="display:none;">
+      <div class="ai-panel-inner">
+
+        <!-- Header -->
+        <div class="ai-panel-header">
+          <div class="ai-panel-header-left">
+            <span class="ai-panel-star">✦</span>
+            <span class="ai-panel-title">AI Mode</span>
+            <span class="ai-panel-badge">IndiaSearch AI</span>
+          </div>
+          <div class="ai-panel-header-right">
+            <button class="ai-panel-exit" onclick="exitAiModePanel()" title="Exit AI Mode">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              Exit AI Mode
+            </button>
+          </div>
+        </div>
+
+        <!-- Scrollable conversation body -->
+        <div class="ai-panel-body">
+          <div class="ai-convo-list" id="aiConvoList"></div>
+
+          <!-- Sticky follow-up input -->
+          <div class="ai-followup-bar">
+            <div class="ai-followup-inner">
+              <span class="ai-followup-icon">✦</span>
+              <textarea id="aiFollowupInput" class="ai-followup-input"
+                placeholder="Ask a follow-up…" rows="1"
+                oninput="autoExpand(this)"></textarea>
+              <button class="ai-followup-send" onclick="sendAiFollowup()" title="Send">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
   </main>

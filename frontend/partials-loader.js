@@ -15,7 +15,7 @@ async function loadHtmlPartials() {
 
 function loadMainApp() {
   const script = document.createElement('script');
-  script.src = 'app.js?v=google-ai-overview-v2';
+  script.src = 'app.js?v=ai-mode-v3';
   document.body.appendChild(script);
 }
 

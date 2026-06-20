@@ -78,6 +78,8 @@ let advancedMode = false;
 let chatHistory = []; // Global chat history for AI Mode
 
 /** ── AI Mode Manager ── **/
+let aiFollowupListenerAdded = false;
+
 function enterAiMode() {
     if (searchBoxStandard) searchBoxStandard.style.display = "none";
     if (searchBoxAi) {
@@ -85,25 +87,38 @@ function enterAiMode() {
         if (mainWrap) mainWrap.classList.add("ai-active");
         if (aiSearchInput) {
             aiSearchInput.focus();
-            if (searchInput.value) aiSearchInput.value = searchInput.value;
+            if (searchInput && searchInput.value) aiSearchInput.value = searchInput.value;
         }
     }
+    // Show AI panel & hide normal results
+    const panel = document.getElementById('aiModePanel');
+    if (panel) panel.style.display = 'flex';
+    if (resultsBox) resultsBox.style.display = 'none';
+    if (paginationContainer) paginationContainer.style.display = 'none';
+    if (searchFiltersDiv) searchFiltersDiv.style.display = 'none';
+    // Setup follow-up input keyboard listener once
+    const fi = document.getElementById('aiFollowupInput');
+    if (fi && !aiFollowupListenerAdded) {
+        fi.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendAiFollowup(); }
+        });
+        aiFollowupListenerAdded = true;
+    }
 }
+
+function exitAiModePanel() { exitAiMode(); }
 
 function enterAdvancedSearch() {
     advancedMode = true;
     enterAiMode();
-    aiSearchInput.placeholder = "Advanced AI Search: Only 2-4 verified sources...";
+    if (aiSearchInput) aiSearchInput.placeholder = "Advanced AI Search: Only 2-4 verified sources...";
 }
 
 function enterNutritionScan() {
-    // Clear previous results to make space for the "Direct" scanner experience
-    resultsBox.innerHTML = "";
-    aiSummaryBox.innerHTML = "";
+    if (resultsBox) resultsBox.innerHTML = "";
+    if (aiSummaryBox) aiSummaryBox.innerHTML = "";
     if (searchFiltersDiv) searchFiltersDiv.style.display = "flex";
     if (heroSection) heroSection.classList.add("hidden");
-    
-    // Direct camera open
     startLiveScan();
 }
 
@@ -115,7 +130,44 @@ function exitAiMode() {
         searchBoxAi.style.display = "none";
         if (mainWrap) mainWrap.classList.remove("ai-active");
     }
+    // Hide AI panel, restore normal UI
+    const panel = document.getElementById('aiModePanel');
+    if (panel) panel.style.display = 'none';
+    if (resultsBox) resultsBox.style.display = '';
+    if (paginationContainer) paginationContainer.style.display = '';
+    if (searchFiltersDiv) searchFiltersDiv.style.display = 'flex';
     if (searchInput) searchInput.focus();
+}
+
+function sendAiFollowup() {
+    const fi = document.getElementById('aiFollowupInput');
+    if (!fi || !fi.value.trim()) return;
+    const val = fi.value.trim();
+    fi.value = ''; fi.style.height = 'auto';
+    if (searchInput) searchInput.value = val;
+    chatHistory.push({ role: 'user', content: val });
+    search(1, true);
+}
+
+function aiFollowup(question) {
+    if (searchInput) searchInput.value = question;
+    chatHistory.push({ role: 'user', content: question });
+    const fi = document.getElementById('aiFollowupInput');
+    if (fi) { fi.value = ''; fi.style.height = 'auto'; }
+    search(1, true);
+}
+
+function generateFollowUps(query, sources) {
+    const q = (query || '').toLowerCase();
+    if (q.includes('what is') || q.includes('kya hai') || q.includes('kya h')) {
+        return [`How does ${query} work?`, `Examples of ${query}`, `${query} benefits and uses`];
+    } else if (q.includes('how') || q.includes('kaise') || q.includes('kaise kare')) {
+        return [`Why is ${query} important?`, `Best practices for ${query}`, `${query} step by step guide`];
+    } else if (q.includes('meaning') || q.includes('matlab') || q.includes('definition')) {
+        return [`${query} in Hindi`, `${query} examples`, `Difference between ${query} and similar`];
+    } else {
+        return [`Tell me more about ${query}`, `Latest news on ${query}`, `${query} in India 2025`];
+    }
 }
 
 function autoExpand(t) {
@@ -126,17 +178,12 @@ function autoExpand(t) {
 function searchAI() {
     if (!aiSearchInput || !aiSearchInput.value.trim()) return;
     const val = aiSearchInput.value.trim();
-    searchInput.value = val;
-    
-    // Save user message to history
+    if (searchInput) searchInput.value = val;
     chatHistory.push({ role: "user", content: val });
-    
-    // Clear and reset AI input immediately for next question
     aiSearchInput.value = "";
     aiSearchInput.style.height = "auto";
     aiSearchInput.focus();
-    
-    search(1, true); // Trigger AI Mode search
+    search(1, true);
 }
 
 if (aiSearchInput) {
@@ -1627,33 +1674,69 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
     
     // Use new /ai-mode endpoint for true AI mode
     if (aiMode) {
+      // Ensure AI panel visible, normal results hidden
+      const aiPanel = document.getElementById('aiModePanel');
+      if (aiPanel) aiPanel.style.display = 'flex';
+      if (resultsBox) { resultsBox.style.display = 'none'; resultsBox.innerHTML = ''; }
+      if (paginationContainer) { paginationContainer.style.display = 'none'; paginationContainer.innerHTML = ''; }
+      if (searchFiltersDiv) searchFiltersDiv.style.display = 'none';
+
+      const convoList = document.getElementById('aiConvoList');
+
+      // Add user query bubble
+      if (convoList) {
+        const userBubble = document.createElement('div');
+        userBubble.className = 'ai-user-bubble';
+        userBubble.innerHTML = `<span class="ai-user-query">${escapeHtml(query)}</span>`;
+        convoList.appendChild(userBubble);
+      }
+
+      // Show skeleton in convo list while loading
+      let skeletonEl = null;
+      if (convoList) {
+        skeletonEl = document.createElement('div');
+        skeletonEl.className = 'ai-answer-block';
+        skeletonEl.innerHTML = `<div class="gai-skeleton">
+          <div class="gai-sk-header"><div class="gai-sk-icon"></div><div class="gai-sk-title"></div></div>
+          <div class="gai-sk-line" style="width:92%"></div>
+          <div class="gai-sk-line" style="width:85%"></div>
+          <div class="gai-sk-line" style="width:88%"></div>
+          <div class="gai-sk-line" style="width:70%"></div>
+          <div class="gai-sk-sources"><div class="gai-sk-pill"></div><div class="gai-sk-pill"></div><div class="gai-sk-pill"></div></div>
+        </div>`;
+        convoList.appendChild(skeletonEl);
+        skeletonEl.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      }
+
+      // Also show skeleton in aiSummaryBox (fallback)
+      if (aiSummaryBox) aiSummaryBox.innerHTML = '';
+
       const aiRes = await fetchWithApiFallback(`/ai-mode?q=${encodeURIComponent(query)}&lang=${targetLang}`);
       const aiData = await aiRes.json();
-      
+
+      // Remove skeleton
+      if (skeletonEl) skeletonEl.remove();
+
       if (aiData.answer) {
-        // Render Google-style AI answer with sources
-        const googleStyleHtml = renderGoogleStyleAIMode(aiData);
-        aiSummaryBox.innerHTML = googleStyleHtml;
-        resultsBox.innerHTML = "";
-        if (paginationContainer) paginationContainer.innerHTML = "";
-        
-        // Auto play voice if enabled
-        if (appSettings.autoPlayVoice) {
-          setTimeout(() => {
-            const ttsBtn = aiSummaryBox.querySelector('.tts-toggle-btn');
-            speakText(aiData.answer, ttsBtn);
-          }, 500);
+        // Render into conversation list
+        if (convoList) {
+          const answerEl = document.createElement('div');
+          answerEl.className = 'ai-answer-block';
+          answerEl.innerHTML = renderGoogleStyleAIMode(aiData);
+          convoList.appendChild(answerEl);
+          setTimeout(() => answerEl.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
         }
-        
+
         // Update chat history
         chatHistory.push({ role: "assistant", content: aiData.answer });
-        
+
         if (searchInput) searchInput.value = query;
-        if (aiSearchInput) {
-          aiSearchInput.value = "";
-          aiSearchInput.style.height = "auto";
-        }
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        if (aiSearchInput) { aiSearchInput.value = ""; aiSearchInput.style.height = "auto"; }
+
+        // Focus follow-up input
+        const fi = document.getElementById('aiFollowupInput');
+        if (fi) setTimeout(() => fi.focus(), 400);
+
         return;
       }
     }
@@ -2422,120 +2505,84 @@ function renderNutritionPanel(n) {
 }
 
 // ═══════════════════════════════════════════
-// GOOGLE-STYLE AI MODE RENDERER
+// GOOGLE AI MODE RENDERER (aim-* system)
 // ═══════════════════════════════════════════
 function renderGoogleStyleAIMode(data) {
-    if (!data || !data.answer) return "";
+    if (!data || !data.answer) return '';
 
-    const query = data.query || "";
-    const answer = data.answer || "";
+    const query = data.query || '';
+    const answer = data.answer || '';
     const sources = data.sources || [];
 
-    // ── Source pills row (Google-style horizontal scroller) ──
+    // ── Source pills ──
     const pillsHtml = sources.slice(0, 8).map((src, idx) => {
-        let domain = "source";
-        try { domain = new URL(src.url || "").hostname.replace(/^www\./, ""); } catch(e) {}
-        const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
-        return `<a href="${src.url || '#'}" target="_blank" rel="noopener" class="gai-pill" title="${escapeHtml(src.title || domain)}">
-          <img src="${faviconUrl}" class="gai-pill-fav" onerror="this.style.display='none'" alt="">
+        let domain = 'source';
+        try { domain = new URL(src.url || '').hostname.replace(/^www\./, ''); } catch(e) {}
+        const fav = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+        return `<a href="${src.url || '#'}" target="_blank" rel="noopener" class="aim-pill" title="${escapeHtml(src.title || domain)}">
+          <img src="${fav}" class="aim-pill-fav" onerror="this.style.display='none'" alt="">
           <span>${escapeHtml(domain)}</span>
-          <span class="gai-pill-num">${idx + 1}</span>
+          <sup class="aim-pill-n">${idx + 1}</sup>
         </a>`;
-    }).join("");
+    }).join('');
 
-    // ── Source cards grid ──
+    // ── Source cards (3-col) ──
     const cardsHtml = sources.slice(0, 6).map((src, idx) => {
-        let domain = "source";
-        try { domain = new URL(src.url || "").hostname.replace(/^www\./, ""); } catch(e) {}
-        const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
-        const snippet = (src.snippet || "").slice(0, 120);
-        return `
-          <a href="${src.url || '#'}" target="_blank" rel="noopener" class="gai-src-card">
-            <div class="gai-src-top">
-              <img src="${faviconUrl}" class="gai-src-fav" onerror="this.style.display='none'" alt="">
-              <span class="gai-src-domain">${escapeHtml(domain)}</span>
-              <span class="gai-src-badge">${idx + 1}</span>
-            </div>
-            <div class="gai-src-title">${escapeHtml((src.title || domain).slice(0, 70))}</div>
-            ${snippet ? `<div class="gai-src-snippet">${escapeHtml(snippet)}</div>` : ''}
-          </a>`;
-    }).join("");
+        let domain = 'source';
+        try { domain = new URL(src.url || '').hostname.replace(/^www\./, ''); } catch(e) {}
+        const fav = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+        const snippet = (src.snippet || '').slice(0, 130);
+        return `<a href="${src.url || '#'}" target="_blank" rel="noopener" class="aim-src-card">
+          <div class="aim-src-top">
+            <img src="${fav}" class="aim-src-fav" onerror="this.style.display='none'" alt="">
+            <span class="aim-src-domain">${escapeHtml(domain)}</span>
+            <span class="aim-src-n">${idx + 1}</span>
+          </div>
+          <div class="aim-src-title">${escapeHtml((src.title || domain).slice(0, 68))}</div>
+          ${snippet ? `<div class="aim-src-snip">${escapeHtml(snippet)}</div>` : ''}
+        </a>`;
+    }).join('');
 
-    // ── Rendered answer with citations ──
+    // ── Follow-up chips ──
+    const followUps = generateFollowUps(query, sources);
+    const chipsHtml = followUps.map(q =>
+        `<button class="aim-followup-chip" onclick="aiFollowup('${q.replace(/'/g, "\\'")}')">
+           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+           ${escapeHtml(q)}
+         </button>`
+    ).join('');
+
     const answeredHtml = renderMarkdownWithCitations(answer, sources);
-
-    // ── Unique ID for animation ──
-    const uid = `gai_${Date.now()}`;
+    const uid = `aim_${Date.now()}`;
 
     const html = `
-    <div class="gai-overview" id="${uid}">
-
-      <!-- ── Header bar ── -->
-      <div class="gai-header">
-        <div class="gai-header-left">
-          <span class="gai-sparkle" aria-hidden="true">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-              <defs>
-                <linearGradient id="sp_${uid}" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0%" stop-color="#FF6B35"/>
-                  <stop offset="50%" stop-color="#f77c1f"/>
-                  <stop offset="100%" stop-color="#ff9a3c"/>
-                </linearGradient>
-              </defs>
-              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" fill="url(#sp_${uid})"/>
-            </svg>
-          </span>
-          <span class="gai-header-title">AI Overview</span>
-          <span class="gai-powered">by IndiaSearch AI</span>
-        </div>
-        <div class="gai-header-right">
-          ${renderVoiceButton("Listen", "tts-toggle-btn gai-tts-btn")}
-        </div>
-      </div>
-
-      <!-- ── Source pills (top, like Google) ── -->
-      ${pillsHtml ? `<div class="gai-pills-row">${pillsHtml}</div>` : ''}
-
-      <!-- ── Main answer body ── -->
-      <div class="gai-body" id="${uid}_body">
-        <div class="gai-answer-text">${answeredHtml}</div>
-      </div>
-
-      <!-- ── Divider ── -->
-      <div class="gai-divider"></div>
-
-      <!-- ── Sources grid ── -->
+    <div class="aim-card" id="${uid}">
+      ${pillsHtml ? `<div class="aim-pills">${pillsHtml}</div>` : ''}
+      <div class="aim-answer">${answeredHtml}</div>
       ${cardsHtml ? `
-        <div class="gai-src-header">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-          </svg>
+        <div class="aim-src-label">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
           Sources
         </div>
-        <div class="gai-src-grid">${cardsHtml}</div>
+        <div class="aim-src-grid">${cardsHtml}</div>
       ` : ''}
-
-      <!-- ── Footer ── -->
-      <div class="gai-footer">
-        <span>AI answers may contain errors. Verify with sources.</span>
-        <button class="gai-feedback-btn" onclick="void 0" title="Send feedback">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-          Feedback
-        </button>
-      </div>
+      ${chipsHtml ? `
+        <div class="aim-chips-label">Related questions</div>
+        <div class="aim-chips">${chipsHtml}</div>
+      ` : ''}
+      <div class="aim-disclaimer">AI answers may contain errors — verify with sources above.</div>
     </div>`;
 
-    // Trigger fade-in after render
     setTimeout(() => {
         const el = document.getElementById(uid);
-        if (el) el.classList.add('gai-visible');
-    }, 50);
+        if (el) el.classList.add('aim-visible');
+    }, 60);
 
     return html;
 }
 
 function renderSportsPanel(matches) {
+
   if (!matches || matches.length === 0) return "";
   
   const matchHtml = matches.map(m => {
