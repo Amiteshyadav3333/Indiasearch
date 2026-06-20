@@ -485,50 +485,81 @@ async def delete_med(media_id: int, session_token: str):
 async def ai_mode_search(q: str, lang: str = "en"):
     """
     Google-style AI Mode: Returns AI-generated answer with sources and images.
+    Falls back to the parallel search pipeline (DuckDuckGo + web) when
+    Elasticsearch is unavailable (e.g. Railway deployment without ES).
     """
     try:
-        from app.services.search_service import search_query
+        results = []
+
+        # --- Try Elasticsearch first (fast local index) ---
         from app.integrations.elastic_client import ElasticClient
-        
         es = ElasticClient.get_client()
-        if not es:
-            return JSONResponse({"error": "Search engine unavailable"}, 503)
-        
-        results, _ = await search_query(es, "indiasearch", q, page=1)
-        
+        if es:
+            try:
+                from app.services.search_service import search_query
+                es_results, _ = await search_query(es, "indiasearch", q, page=1)
+                results = es_results or []
+            except Exception as es_err:
+                logger.warning(f"[AI Mode] ES query failed, falling back: {es_err}")
+
+        # --- Fallback: use the main parallel pipeline (DDG + Yahoo + wiki) ---
+        if not results:
+            logger.info(f"[AI Mode] ES unavailable or empty — using parallel pipeline for: {q!r}")
+            try:
+                pipeline_response = await run_parallel_pipeline(
+                    query=q,
+                    page=1,
+                    filter="all",
+                    lang=lang or "en",
+                    force_ai=False,
+                    pdf_content=None,
+                    age_verified=False,
+                    advanced_mode=False,
+                    history=None,
+                    lat=None,
+                    lon=None,
+                    limit=10,
+                )
+                # pipeline_response is a dict with a "results" key
+                if isinstance(pipeline_response, dict):
+                    results = pipeline_response.get("results") or []
+            except Exception as pipe_err:
+                logger.error(f"[AI Mode] Pipeline fallback failed: {pipe_err}")
+
         if not results:
             return {
                 "answer": "I couldn't find relevant information. Try a different query.",
                 "sources": [],
-                "images": []
+                "images": [],
+                "query": q,
             }
-        
+
         # Generate Google-style AI answer
         answer = generate_google_style_ai_answer(q, results, lang)
-        
+
         # Format sources with images
         sources = []
         images = []
         for i, r in enumerate(results[:8], 1):
             title = r.get('title', '')
             url = r.get('url', '')
-            snippet = r.get('snippet', '')
-            
+            snippet = r.get('snippet', '') or r.get('content', '')
+
             sources.append({
                 "id": i,
                 "title": title,
                 "url": url,
                 "snippet": snippet[:150]
             })
-            
-            # For images, try to get from content or generate placeholder
+
+            domain = url.split('/')[2] if url.count('/') >= 2 else url
             images.append({
                 "id": i,
                 "title": title,
                 "url": url,
-                "image_url": f"https://www.google.com/s2/favicons?domain={url.split('/')[2] if '/' in url else url}&sz=128"
+                "image_url": f"https://www.google.com/s2/favicons?domain={domain}&sz=128"
             })
-        
+
         return {
             "answer": answer,
             "sources": sources,
