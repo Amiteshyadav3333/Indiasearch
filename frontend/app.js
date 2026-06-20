@@ -2422,19 +2422,16 @@ function renderGoogleStyleAIMode(data) {
     const answer = data.answer || '';
     const sources = data.sources || [];
 
-    // ── Perplexity-style Source Cards (Top of the page, clean grid) ──
-    const sourcesHtml = sources.slice(0, 4).map((src, idx) => {
+    // ── Right-side sources HTML (simple clean links with favicon) ──
+    const rightSourcesHtml = sources.slice(0, 6).map((src, idx) => {
         let domain = 'source';
         try { domain = new URL(src.url || '').hostname.replace(/^www\./, ''); } catch(e) {}
         const fav = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
         return `
-        <a href="${src.url || '#'}" target="_blank" rel="noopener" class="prx-source-card">
-          <div class="prx-source-title">${escapeHtml(src.title || domain)}</div>
-          <div class="prx-source-footer">
-            <img src="${fav}" class="prx-source-fav" onerror="this.style.display='none'" alt="">
-            <span class="prx-source-domain">${escapeHtml(domain)}</span>
-            <span class="prx-source-n">${idx + 1}</span>
-          </div>
+        <a href="${src.url || '#'}" target="_blank" rel="noopener" class="prx-right-source">
+          <span class="prx-right-source-n">${idx + 1}</span>
+          <img src="${fav}" class="prx-right-source-fav" onerror="this.style.display='none'" alt="">
+          <span class="prx-right-source-title" title="${escapeHtml(src.title || domain)}">${escapeHtml(src.title || domain)}</span>
         </a>`;
     }).join('');
 
@@ -2455,23 +2452,21 @@ function renderGoogleStyleAIMode(data) {
       <!-- Query Title -->
       <h1 class="prx-query-title">${escapeHtml(query)}</h1>
 
-      <!-- Sources Section -->
-      ${sources.length > 0 ? `
-        <div class="prx-section-header">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="margin-right:6px; vertical-align:middle;"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a4 4 0 0 1-4-4V6" /><path d="M18 14H10" /><path d="M15 18h-5" /><path d="M10 6h8v4h-8z" /></svg>
-          Sources
+      <!-- Split Layout (Answer on Left, Links on Right) -->
+      <div class="prx-split-layout">
+        <div class="prx-answer-column">
+          <div class="prx-answer-body">${answeredHtml}</div>
         </div>
-        <div class="prx-sources-grid">
-          ${sourcesHtml}
-        </div>
-      ` : ''}
-
-      <!-- Answer Section -->
-      <div class="prx-section-header">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="margin-right:6px; vertical-align:middle; color:#FF6B35;"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
-        Answer
+        
+        ${sources.length > 0 ? `
+          <div class="prx-sidebar-column">
+            <div class="prx-sidebar-title">References</div>
+            <div class="prx-right-sources-list">
+              ${rightSourcesHtml}
+            </div>
+          </div>
+        ` : ''}
       </div>
-      <div class="prx-answer-body">${answeredHtml}</div>
 
       <!-- Related Section -->
       ${chipsHtml ? `

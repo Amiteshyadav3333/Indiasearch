@@ -6869,3 +6869,118 @@ body {
     font-size: 22px;
   }
 }
+
+/* ── Perplexity-Style Split Layout ── */
+.prx-split-layout {
+  display: flex;
+  gap: 30px;
+  margin-bottom: 24px;
+}
+
+.prx-answer-column {
+  flex: 1;
+  min-width: 0;
+}
+
+.prx-sidebar-column {
+  width: 240px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border);
+  padding-left: 20px;
+}
+
+.prx-sidebar-title {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 12px;
+}
+
+.prx-right-sources-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.prx-right-source {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.prx-right-source:hover {
+  background: var(--bg-card);
+  border-color: var(--text-muted);
+  transform: translateX(3px);
+}
+
+.prx-right-source-n {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 50%;
+  width: 15px;
+  height: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+[data-theme="dark"] .prx-right-source-n {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.prx-right-source-fav {
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.prx-right-source-title {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+/* Responsive design for split layout */
+@media (max-width: 768px) {
+  .prx-split-layout {
+    flex-direction: column;
+    gap: 20px;
+  }
+  .prx-sidebar-column {
+    width: 100%;
+    border-left: none;
+    border-top: 1px solid var(--border);
+    padding-left: 0;
+    padding-top: 16px;
+  }
+  .prx-right-sources-list {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .prx-right-source {
+    flex: 1 1 calc(50% - 4px);
+    max-width: calc(50% - 4px);
+  }
+}
+@media (max-width: 480px) {
+  .prx-right-source {
+    flex: 1 1 100%;
+    max-width: 100%;
+  }
+}
