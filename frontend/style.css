@@ -6963,24 +6963,6 @@ body {
     gap: 20px;
   }
   .prx-sidebar-column {
-    width: 100%;
-    border-left: none;
-    border-top: 1px solid var(--border);
-    padding-left: 0;
-    padding-top: 16px;
-  }
-  .prx-right-sources-list {
-    flex-direction: row;
-    flex-wrap: wrap;
-  }
-  .prx-right-source {
-    flex: 1 1 calc(50% - 4px);
-    max-width: calc(50% - 4px);
-  }
-}
-@media (max-width: 480px) {
-  .prx-right-source {
-    flex: 1 1 100%;
-    max-width: 100%;
+    display: none; /* Hide references sidebar completely on mobile/tablets so they don't show at the bottom */
   }
 }
