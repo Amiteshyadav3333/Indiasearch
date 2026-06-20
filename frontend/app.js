@@ -78,7 +78,6 @@ let advancedMode = false;
 let chatHistory = []; // Global chat history for AI Mode
 
 /** ── AI Mode Manager ── **/
-let aiFollowupListenerAdded = false;
 
 function enterAiMode() {
     if (searchBoxStandard) searchBoxStandard.style.display = "none";
@@ -89,20 +88,6 @@ function enterAiMode() {
             aiSearchInput.focus();
             if (searchInput && searchInput.value) aiSearchInput.value = searchInput.value;
         }
-    }
-    // Show AI panel & hide normal results
-    const panel = document.getElementById('aiModePanel');
-    if (panel) panel.style.display = 'flex';
-    if (resultsBox) resultsBox.style.display = 'none';
-    if (paginationContainer) paginationContainer.style.display = 'none';
-    if (searchFiltersDiv) searchFiltersDiv.style.display = 'none';
-    // Setup follow-up input keyboard listener once
-    const fi = document.getElementById('aiFollowupInput');
-    if (fi && !aiFollowupListenerAdded) {
-        fi.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendAiFollowup(); }
-        });
-        aiFollowupListenerAdded = true;
     }
 }
 
@@ -130,43 +115,23 @@ function exitAiMode() {
         searchBoxAi.style.display = "none";
         if (mainWrap) mainWrap.classList.remove("ai-active");
     }
-    // Hide AI panel, restore normal UI
-    const panel = document.getElementById('aiModePanel');
-    if (panel) panel.style.display = 'none';
-    if (resultsBox) resultsBox.style.display = '';
-    if (paginationContainer) paginationContainer.style.display = '';
-    if (searchFiltersDiv) searchFiltersDiv.style.display = 'flex';
     if (searchInput) searchInput.focus();
-}
-
-function sendAiFollowup() {
-    const fi = document.getElementById('aiFollowupInput');
-    if (!fi || !fi.value.trim()) return;
-    const val = fi.value.trim();
-    fi.value = ''; fi.style.height = 'auto';
-    if (searchInput) searchInput.value = val;
-    chatHistory.push({ role: 'user', content: val });
-    search(1, true);
 }
 
 function aiFollowup(question) {
     if (searchInput) searchInput.value = question;
     chatHistory.push({ role: 'user', content: question });
-    const fi = document.getElementById('aiFollowupInput');
-    if (fi) { fi.value = ''; fi.style.height = 'auto'; }
     search(1, true);
 }
 
-function generateFollowUps(query, sources) {
+function generateFollowUps(query) {
     const q = (query || '').toLowerCase();
-    if (q.includes('what is') || q.includes('kya hai') || q.includes('kya h')) {
-        return [`How does ${query} work?`, `Examples of ${query}`, `${query} benefits and uses`];
-    } else if (q.includes('how') || q.includes('kaise') || q.includes('kaise kare')) {
-        return [`Why is ${query} important?`, `Best practices for ${query}`, `${query} step by step guide`];
-    } else if (q.includes('meaning') || q.includes('matlab') || q.includes('definition')) {
-        return [`${query} in Hindi`, `${query} examples`, `Difference between ${query} and similar`];
+    if (q.includes('what is') || q.includes('kya hai')) {
+        return [`How does ${query} work?`, `${query} examples`, `${query} vs alternatives`];
+    } else if (q.includes('how') || q.includes('kaise')) {
+        return [`Why is ${query} important?`, `Best way to ${query}`, `${query} tips`];
     } else {
-        return [`Tell me more about ${query}`, `Latest news on ${query}`, `${query} in India 2025`];
+        return [`More about ${query}`, `Latest on ${query}`, `${query} in India`];
     }
 }
 
@@ -1637,23 +1602,18 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
         </div>`).join("")}
     </div>`;
 
-  // Google AI Overview skeleton when in AI mode
+  // Perplexity-style skeleton when in AI mode
   if (aiMode) {
     aiSummaryBox.innerHTML = `
-      <div class="gai-skeleton">
-        <div class="gai-sk-header">
-          <div class="gai-sk-icon"></div>
-          <div class="gai-sk-title"></div>
+      <div class="prx-skeleton">
+        <div class="prx-sk-row">
+          <div class="prx-sk-src"></div><div class="prx-sk-src"></div><div class="prx-sk-src"></div>
         </div>
-        <div class="gai-sk-line" style="width:95%"></div>
-        <div class="gai-sk-line" style="width:88%"></div>
-        <div class="gai-sk-line" style="width:92%"></div>
-        <div class="gai-sk-line" style="width:75%"></div>
-        <div class="gai-sk-sources">
-          <div class="gai-sk-pill"></div>
-          <div class="gai-sk-pill"></div>
-          <div class="gai-sk-pill"></div>
-        </div>
+        <div class="prx-sk-line" style="width:96%"></div>
+        <div class="prx-sk-line" style="width:86%"></div>
+        <div class="prx-sk-line" style="width:92%"></div>
+        <div class="prx-sk-line" style="width:74%"></div>
+        <div class="prx-sk-line" style="width:82%"></div>
       </div>`;
   } else {
     aiSummaryBox.innerHTML = "";
@@ -1674,69 +1634,17 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
     
     // Use new /ai-mode endpoint for true AI mode
     if (aiMode) {
-      // Ensure AI panel visible, normal results hidden
-      const aiPanel = document.getElementById('aiModePanel');
-      if (aiPanel) aiPanel.style.display = 'flex';
-      if (resultsBox) { resultsBox.style.display = 'none'; resultsBox.innerHTML = ''; }
-      if (paginationContainer) { paginationContainer.style.display = 'none'; paginationContainer.innerHTML = ''; }
-      if (searchFiltersDiv) searchFiltersDiv.style.display = 'none';
-
-      const convoList = document.getElementById('aiConvoList');
-
-      // Add user query bubble
-      if (convoList) {
-        const userBubble = document.createElement('div');
-        userBubble.className = 'ai-user-bubble';
-        userBubble.innerHTML = `<span class="ai-user-query">${escapeHtml(query)}</span>`;
-        convoList.appendChild(userBubble);
-      }
-
-      // Show skeleton in convo list while loading
-      let skeletonEl = null;
-      if (convoList) {
-        skeletonEl = document.createElement('div');
-        skeletonEl.className = 'ai-answer-block';
-        skeletonEl.innerHTML = `<div class="gai-skeleton">
-          <div class="gai-sk-header"><div class="gai-sk-icon"></div><div class="gai-sk-title"></div></div>
-          <div class="gai-sk-line" style="width:92%"></div>
-          <div class="gai-sk-line" style="width:85%"></div>
-          <div class="gai-sk-line" style="width:88%"></div>
-          <div class="gai-sk-line" style="width:70%"></div>
-          <div class="gai-sk-sources"><div class="gai-sk-pill"></div><div class="gai-sk-pill"></div><div class="gai-sk-pill"></div></div>
-        </div>`;
-        convoList.appendChild(skeletonEl);
-        skeletonEl.scrollIntoView({ behavior: 'smooth', block: 'end' });
-      }
-
-      // Also show skeleton in aiSummaryBox (fallback)
-      if (aiSummaryBox) aiSummaryBox.innerHTML = '';
-
       const aiRes = await fetchWithApiFallback(`/ai-mode?q=${encodeURIComponent(query)}&lang=${targetLang}`);
       const aiData = await aiRes.json();
 
-      // Remove skeleton
-      if (skeletonEl) skeletonEl.remove();
-
       if (aiData.answer) {
-        // Render into conversation list
-        if (convoList) {
-          const answerEl = document.createElement('div');
-          answerEl.className = 'ai-answer-block';
-          answerEl.innerHTML = renderGoogleStyleAIMode(aiData);
-          convoList.appendChild(answerEl);
-          setTimeout(() => answerEl.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
-        }
-
-        // Update chat history
+        aiSummaryBox.innerHTML = renderGoogleStyleAIMode(aiData);
+        resultsBox.innerHTML = "";
+        if (paginationContainer) paginationContainer.innerHTML = "";
         chatHistory.push({ role: "assistant", content: aiData.answer });
-
         if (searchInput) searchInput.value = query;
         if (aiSearchInput) { aiSearchInput.value = ""; aiSearchInput.style.height = "auto"; }
-
-        // Focus follow-up input
-        const fi = document.getElementById('aiFollowupInput');
-        if (fi) setTimeout(() => fi.focus(), 400);
-
+        window.scrollTo({ top: 0, behavior: "smooth" });
         return;
       }
     }
@@ -2514,68 +2422,74 @@ function renderGoogleStyleAIMode(data) {
     const answer = data.answer || '';
     const sources = data.sources || [];
 
-    // ── Source pills ──
-    const pillsHtml = sources.slice(0, 8).map((src, idx) => {
+    // ── Perplexity-style Source Cards (Top of the page, clean grid) ──
+    const sourcesHtml = sources.slice(0, 4).map((src, idx) => {
         let domain = 'source';
         try { domain = new URL(src.url || '').hostname.replace(/^www\./, ''); } catch(e) {}
         const fav = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
-        return `<a href="${src.url || '#'}" target="_blank" rel="noopener" class="aim-pill" title="${escapeHtml(src.title || domain)}">
-          <img src="${fav}" class="aim-pill-fav" onerror="this.style.display='none'" alt="">
-          <span>${escapeHtml(domain)}</span>
-          <sup class="aim-pill-n">${idx + 1}</sup>
-        </a>`;
-    }).join('');
-
-    // ── Source cards (3-col) ──
-    const cardsHtml = sources.slice(0, 6).map((src, idx) => {
-        let domain = 'source';
-        try { domain = new URL(src.url || '').hostname.replace(/^www\./, ''); } catch(e) {}
-        const fav = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
-        const snippet = (src.snippet || '').slice(0, 130);
-        return `<a href="${src.url || '#'}" target="_blank" rel="noopener" class="aim-src-card">
-          <div class="aim-src-top">
-            <img src="${fav}" class="aim-src-fav" onerror="this.style.display='none'" alt="">
-            <span class="aim-src-domain">${escapeHtml(domain)}</span>
-            <span class="aim-src-n">${idx + 1}</span>
+        return `
+        <a href="${src.url || '#'}" target="_blank" rel="noopener" class="prx-source-card">
+          <div class="prx-source-title">${escapeHtml(src.title || domain)}</div>
+          <div class="prx-source-footer">
+            <img src="${fav}" class="prx-source-fav" onerror="this.style.display='none'" alt="">
+            <span class="prx-source-domain">${escapeHtml(domain)}</span>
+            <span class="prx-source-n">${idx + 1}</span>
           </div>
-          <div class="aim-src-title">${escapeHtml((src.title || domain).slice(0, 68))}</div>
-          ${snippet ? `<div class="aim-src-snip">${escapeHtml(snippet)}</div>` : ''}
         </a>`;
     }).join('');
 
     // ── Follow-up chips ──
-    const followUps = generateFollowUps(query, sources);
+    const followUps = generateFollowUps(query);
     const chipsHtml = followUps.map(q =>
-        `<button class="aim-followup-chip" onclick="aiFollowup('${q.replace(/'/g, "\\'")}')">
-           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-           ${escapeHtml(q)}
+        `<button class="prx-followup-chip" onclick="aiFollowup('${q.replace(/'/g, "\\'")}')">
+           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+           <span>${escapeHtml(q)}</span>
          </button>`
     ).join('');
 
     const answeredHtml = renderMarkdownWithCitations(answer, sources);
-    const uid = `aim_${Date.now()}`;
+    const uid = `prx_${Date.now()}`;
 
     const html = `
-    <div class="aim-card" id="${uid}">
-      ${pillsHtml ? `<div class="aim-pills">${pillsHtml}</div>` : ''}
-      <div class="aim-answer">${answeredHtml}</div>
-      ${cardsHtml ? `
-        <div class="aim-src-label">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+    <div class="prx-answer-container" id="${uid}">
+      <!-- Query Title -->
+      <h1 class="prx-query-title">${escapeHtml(query)}</h1>
+
+      <!-- Sources Section -->
+      ${sources.length > 0 ? `
+        <div class="prx-section-header">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="margin-right:6px; vertical-align:middle;"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a4 4 0 0 1-4-4V6" /><path d="M18 14H10" /><path d="M15 18h-5" /><path d="M10 6h8v4h-8z" /></svg>
           Sources
         </div>
-        <div class="aim-src-grid">${cardsHtml}</div>
+        <div class="prx-sources-grid">
+          ${sourcesHtml}
+        </div>
       ` : ''}
+
+      <!-- Answer Section -->
+      <div class="prx-section-header">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="margin-right:6px; vertical-align:middle; color:#FF6B35;"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
+        Answer
+      </div>
+      <div class="prx-answer-body">${answeredHtml}</div>
+
+      <!-- Related Section -->
       ${chipsHtml ? `
-        <div class="aim-chips-label">Related questions</div>
-        <div class="aim-chips">${chipsHtml}</div>
+        <div class="prx-section-header" style="margin-top:24px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="margin-right:6px; vertical-align:middle;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          Related
+        </div>
+        <div class="prx-chips-container">${chipsHtml}</div>
       ` : ''}
-      <div class="aim-disclaimer">AI answers may contain errors — verify with sources above.</div>
+      
+      <div class="prx-footer">
+        <span>IndiaSearch AI</span> • <span>AI answers may contain errors</span>
+      </div>
     </div>`;
 
     setTimeout(() => {
         const el = document.getElementById(uid);
-        if (el) el.classList.add('aim-visible');
+        if (el) el.classList.add('prx-visible');
     }, 60);
 
     return html;
