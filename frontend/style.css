@@ -4928,6 +4928,29 @@ body {
 
 .pro-link.website:hover {
   background: var(--accent-blue);
+  color: white;
+  border-color: var(--accent-blue);
+}
+
+.pro-link.facebook {
+  background: #1877f2;
+  color: white;
+  border-color: #1877f2;
+}
+
+.pro-link.facebook:hover {
+  background: #166fe5;
+  border-color: #166fe5;
+}
+
+.pro-link.instagram:hover {
+  background: #E1306C;
+  color: white;
+  border-color: #E1306C;
+}
+
+.pro-link.website:hover {
+  background: var(--accent-blue);
   color: #fff;
 }
 
@@ -5607,6 +5630,14 @@ body {
 }
 .about-btn-link.twitter {
   background: #1da1f2;
+  color: white;
+}
+.about-btn-link.instagram {
+  background: #E1306C;
+  color: white;
+}
+.about-btn-link.facebook {
+  background: #1877f2;
   color: white;
 }
 .about-btn-link.portfolio {
@@ -6978,8 +7009,16 @@ body {
     width: 170px;
     padding-left: 10px;
   }
-  .prx-right-source-title {
+  .prx-sidebar-column .prx-source-card {
+    min-height: 54px;
+    padding: 8px;
+  }
+  .prx-sidebar-column .prx-source-title {
     font-size: 10px;
+    margin-bottom: 4px;
+  }
+  .prx-sidebar-column .prx-source-domain {
+    font-size: 9px;
   }
 }
 
@@ -6989,12 +7028,25 @@ body {
     padding-left: 8px;
     gap: 4px;
   }
-  .prx-right-source {
-    padding: 6px 8px;
-    gap: 4px;
+  .prx-sidebar-column .prx-source-card {
+    min-height: 48px;
+    padding: 6px;
+    border-radius: 6px;
   }
-  .prx-right-source-fav {
+  .prx-sidebar-column .prx-source-title {
+    font-size: 9px;
+    margin-bottom: 2px;
+  }
+  .prx-sidebar-column .prx-source-domain {
+    display: none;
+  }
+  .prx-sidebar-column .prx-source-fav {
+    width: 10px;
+    height: 10px;
+  }
+  .prx-sidebar-column .prx-source-n {
     width: 12px;
     height: 12px;
+    font-size: 8px;
   }
 }

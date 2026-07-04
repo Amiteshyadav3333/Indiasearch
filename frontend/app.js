@@ -1707,7 +1707,23 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
 
     if (data.ai_summary && pageNumber === 1) {
       rawText = typeof data.ai_summary === 'string' ? data.ai_summary : (data.ai_summary.answer || String(data.ai_summary));
-      if (aiMode || data.intent === 'ai') {
+      
+      if (aiMode) {
+        aiSummaryBox.innerHTML = renderGoogleStyleAIMode({
+          answer: rawText,
+          sources: aiSources,
+          query: query
+        });
+        resultsBox.innerHTML = "";
+        if (paginationContainer) paginationContainer.innerHTML = "";
+        chatHistory.push({ role: "assistant", content: rawText });
+        if (searchInput) searchInput.value = query;
+        if (aiSearchInput) { aiSearchInput.value = ""; aiSearchInput.style.height = "auto"; }
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
+
+      if (data.intent === 'ai') {
         shouldAnimate = true;
         
         // Render FULL HISTORY for AI Mode — plain, no bubbles
@@ -2422,16 +2438,21 @@ function renderGoogleStyleAIMode(data) {
     const answer = data.answer || '';
     const sources = data.sources || [];
 
-    // ── Right-side sources HTML (simple clean links with favicon) ──
+    // ── Right-side sources HTML (Google SGE Card Style with profile/favicon) ──
     const rightSourcesHtml = sources.slice(0, 6).map((src, idx) => {
         let domain = 'source';
         try { domain = new URL(src.url || '').hostname.replace(/^www\./, ''); } catch(e) {}
-        const fav = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+        const fav = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+        const siteName = domain.split('.')[0];
+        const displayName = siteName.charAt(0).toUpperCase() + siteName.slice(1);
         return `
-        <a href="${src.url || '#'}" target="_blank" rel="noopener" class="prx-right-source">
-          <span class="prx-right-source-n">${idx + 1}</span>
-          <img src="${fav}" class="prx-right-source-fav" onerror="this.style.display='none'" alt="">
-          <span class="prx-right-source-title" title="${escapeHtml(src.title || domain)}">${escapeHtml(src.title || domain)}</span>
+        <a href="${src.url || '#'}" target="_blank" rel="noopener" class="prx-source-card">
+          <div class="prx-source-title" title="${escapeHtml(src.title || domain)}">${escapeHtml(src.title || domain)}</div>
+          <div class="prx-source-footer">
+            <img src="${fav}" class="prx-source-fav" onerror="this.style.display='none'" alt="">
+            <span class="prx-source-domain">${displayName}</span>
+            <span class="prx-source-n">${idx + 1}</span>
+          </div>
         </a>`;
     }).join('');
 
