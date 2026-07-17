@@ -27,6 +27,7 @@ class ElasticClient:
     """Singleton Elasticsearch client wrapper."""
 
     _client: Optional[object] = None
+    _initialized: bool = False
 
     @classmethod
     def _build(cls):
@@ -55,8 +56,9 @@ class ElasticClient:
     @classmethod
     def get_client(cls):
         """Return a shared Elasticsearch connection (lazy singleton)."""
-        if cls._client is None:
+        if not cls._initialized:
             cls._client = cls._build()
+            cls._initialized = True
         return cls._client
 
     @classmethod
