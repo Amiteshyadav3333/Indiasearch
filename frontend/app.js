@@ -1477,56 +1477,18 @@ function getVideoThumbnail(item = {}, title = "") {
   return mediaFallbackImage(title || item.title || "Video", "Video");
 }
 
-// ─── renderAiSources: Minimal circular favicon row for top-left of AI card ───
+// ─── renderAiSources: Minimal circular favicon row for top-left of AI card (Disabled) ───
 function renderAiSources(sources = []) {
-  if (!sources || sources.length === 0) return "";
-
-  // Deduplicate by host
-  const seen = new Set();
-  const unique = sources.filter(src => {
-    const h = src.host || src.url || "";
-    if (seen.has(h)) return false;
-    seen.add(h);
-    return true;
-  });
-
-  const icons = unique.slice(0, 8).map((src) => {
-    const url   = escapeHtml(src.url);
-    const host  = escapeHtml(src.host || getReadableHost(src.url) || "source");
-    const siteName = host.split('.')[0];
-    const displayName = siteName.charAt(0).toUpperCase() + siteName.slice(1);
-    const faviconUrl = `https://www.google.com/s2/favicons?sz=32&domain=${host}`;
-    const initials = displayName.slice(0, 2);
-
-    return `
-      <a class="ai-source-favicon-link" href="${url}" target="_blank" rel="noopener noreferrer" title="${displayName}">
-        <img src="${faviconUrl}" alt="${initials}"
-          onerror="this.onerror=null;this.src='data:image/svg+xml;charset=utf-8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2214%22 height=%2214%22 viewBox=%220 0 14 14%22><rect width=%2214%22 height=%2214%22 rx=%227%22 fill=%22%234285f4%22/><text x=%227%22 y=%2210.5%22 font-size=%228%22 font-family=%22sans-serif%22 fill=%22white%22 text-anchor=%22middle%22 font-weight=%22bold%22>${initials}</text></svg>'"
-        >
-      </a>
-    `;
-  }).join("");
-
-  return `<div class="ai-sources-minimal-row">
-    <span class="ai-sources-label">Sources</span>
-    ${icons}
-  </div>`;
+  return "";
 }
 
 function renderAiSourcesIcons(sources = []) {
-  return renderAiSources(sources);
+  return "";
 }
 
 function renderMarkdownWithCitations(markdown = "", sources = []) {
   const linkedText = String(markdown).replace(/\[(\d+)\]/g, (match, number) => {
-    const src = sources[Number(number) - 1];
-    if (!src || !src.url) {
-      return `<span class="ai-citation ai-citation-missing" title="Source ${number} is not available in this response">[${number}]</span>`;
-    }
-
-    const url = escapeHtml(src.url);
-    const title = escapeHtml(src.title || "Open source");
-    return `<a class="ai-citation" href="${url}" target="_blank" rel="noopener noreferrer" title="${title}" data-source-url="${url}">[${number}]</a>`;
+    return `<span class="ai-citation-plain">[${number}]</span>`;
   });
 
   return marked.parse(linkedText);
@@ -2438,24 +2400,6 @@ function renderGoogleStyleAIMode(data) {
     const answer = data.answer || '';
     const sources = data.sources || [];
 
-    // ── Right-side sources HTML (Google SGE Card Style with profile/favicon) ──
-    const rightSourcesHtml = sources.slice(0, 6).map((src, idx) => {
-        let domain = 'source';
-        try { domain = new URL(src.url || '').hostname.replace(/^www\./, ''); } catch(e) {}
-        const fav = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
-        const siteName = domain.split('.')[0];
-        const displayName = siteName.charAt(0).toUpperCase() + siteName.slice(1);
-        return `
-        <a href="${src.url || '#'}" target="_blank" rel="noopener" class="prx-source-card">
-          <div class="prx-source-title" title="${escapeHtml(src.title || domain)}">${escapeHtml(src.title || domain)}</div>
-          <div class="prx-source-footer">
-            <img src="${fav}" class="prx-source-fav" onerror="this.style.display='none'" alt="">
-            <span class="prx-source-domain">${displayName}</span>
-            <span class="prx-source-n">${idx + 1}</span>
-          </div>
-        </a>`;
-    }).join('');
-
     // ── Follow-up chips ──
     const followUps = generateFollowUps(query);
     const chipsHtml = followUps.map(q =>
@@ -2473,20 +2417,11 @@ function renderGoogleStyleAIMode(data) {
       <!-- Query Title -->
       <h1 class="prx-query-title">${escapeHtml(query)}</h1>
 
-      <!-- Split Layout (Answer on Left, Links on Right) -->
+      <!-- Full-Width Answer Layout (No references/sidebar column) -->
       <div class="prx-split-layout">
-        <div class="prx-answer-column">
+        <div class="prx-answer-column" style="width: 100%;">
           <div class="prx-answer-body">${answeredHtml}</div>
         </div>
-        
-        ${sources.length > 0 ? `
-          <div class="prx-sidebar-column">
-            <div class="prx-sidebar-title">References</div>
-            <div class="prx-right-sources-list">
-              ${rightSourcesHtml}
-            </div>
-          </div>
-        ` : ''}
       </div>
 
       <!-- Related Section -->

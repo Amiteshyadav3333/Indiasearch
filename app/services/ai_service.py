@@ -187,20 +187,48 @@ def groq_chat(query, docs, lang="English", pdf_content=None, intent="general", h
         print(f"Groq Error: {e}")
         return None
 
+LANGUAGE_NAMES_MAP = {
+    "en": "English", "hi": "Hindi", "as": "Assamese", "bn": "Bengali",
+    "brx": "Bodo", "doi": "Dogri", "gu": "Gujarati", "kn": "Kannada",
+    "ks": "Kashmiri", "gom": "Konkani", "mai": "Maithili", "ml": "Malayalam",
+    "mni": "Manipuri", "mr": "Marathi", "ne": "Nepali", "or": "Odia",
+    "pa": "Punjabi", "sa": "Sanskrit", "sat": "Santali", "sd": "Sindhi",
+    "ta": "Tamil", "te": "Telugu", "ur": "Urdu", "bho": "Bhojpuri"
+}
+
+def get_language_name(lang: str) -> str:
+    if not lang:
+        return "English"
+    lang_clean = lang.strip().lower()
+    if lang_clean in LANGUAGE_NAMES_MAP:
+        return LANGUAGE_NAMES_MAP[lang_clean]
+    for code, name in LANGUAGE_NAMES_MAP.items():
+        if name.lower() == lang_clean:
+            return name
+    return lang
+
 def generate_ai_summary(query, docs, ai_mode=False, lang="English", pdf_content=None, intent="general", history=None):
+    lang_name = get_language_name(lang)
     if intent == "nutrition" or ai_mode:
-        res = gemini_chat(query, docs, lang, pdf_content, intent, history)
+        res = gemini_chat(query, docs, lang_name, pdf_content, intent, history)
         if res: return res
     
     return (
-        groq_chat(query, docs, lang, pdf_content, intent, history)
-        or _extractive_summary(query, docs, lang, advanced=(intent == "advanced"))
+        groq_chat(query, docs, lang_name, pdf_content, intent, history)
+        or _extractive_summary(query, docs, lang_name, advanced=(intent == "advanced"))
     )
 
 
 def generate_google_style_ai_answer(query: str, docs: list, lang: str = "English") -> str:
-    """Generate Google-like AI answer with sources at the bottom."""
+    """Generate Google-like AI answer without sources at the bottom, in the target language."""
+    lang_name = get_language_name(lang)
     if not docs:
+        if lang_name != "English":
+            try:
+                from app.services.translator import translator
+                return translator.translate_result("I couldn't find relevant information for your query. Please try a different search.", _language_name_to_code(lang_name))
+            except:
+                pass
         return "I couldn't find relevant information for your query. Please try a different search."
     
     context_parts = []
@@ -213,6 +241,7 @@ def generate_google_style_ai_answer(query: str, docs: list, lang: str = "English
     context = "\n\n".join(context_parts)
     
     prompt = f"""You are a Google-like AI assistant. Answer the user's query based on the sources below.
+You MUST write the entire answer in the target language: {lang_name}. Even if the source texts are in English, your final response must be written in {lang_name}.
 
 USER QUERY: {query}
 
@@ -220,13 +249,12 @@ SOURCES:
 {context}
 
 INSTRUCTIONS:
-1. Provide a direct, comprehensive answer to the query
-2. If the sources don't contain enough information, say so honestly
+1. Provide a direct, comprehensive answer to the query in {lang_name}
+2. If the sources don't contain enough information, say so honestly in {lang_name}
 3. Cite sources using numbered brackets [1], [2], etc.
 4. Format your answer like Google AI Overview / Perplexity
 5. Use markdown for readability
 6. Keep answer concise but complete (3-4 paragraphs max)
-7. End with "Sources:" list showing URLs
 
 ANSWER:"""
     
@@ -249,4 +277,4 @@ ANSWER:"""
         except Exception as e:
             print(f"[Google AI Mode] Groq error: {e}")
     
-    return _extractive_summary(query, docs, lang, advanced=True)
+    return _extractive_summary(query, docs, lang_name, advanced=True)
