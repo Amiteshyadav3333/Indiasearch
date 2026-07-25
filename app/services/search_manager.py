@@ -31,6 +31,7 @@ from app.services import (
     wiki_service,
     ad_service
 )
+from app.services import local_places_service
 from app.utils import translator
 
 logger = logging.getLogger(__name__)
@@ -295,8 +296,10 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
     if filter in filter_intent_map:
         intent = filter_intent_map[filter]
         
-    if advanced_mode: force_ai = True
-    if force_ai: intent = "ai"
+    if advanced_mode:
+        force_ai = True
+    if force_ai and not advanced_mode:
+        intent = "ai"
     
     # ── Modify Query Based on Restricted Filters ───────────
     if intent == "sarkari" or filter == "sarkari":
@@ -311,8 +314,13 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
         en_query = f"{en_query} (site:irctc.co.in OR site:indianrail.gov.in)"
     
     # ── Step 1.2: General India Context ───────────────────
-    local_keywords = ["near me", "nearby", "around me", "in my city", "local"]
-    is_local_query = any(k in en_query.lower() for k in local_keywords) or intent in ["jugaad", "weather"]
+    is_local_query = local_places_service.is_local_query(query) or intent in ["jugaad", "weather"]
+    location_context = {}
+    nearby_results = []
+    if is_local_query:
+        location_context = await local_places_service.resolve_location(query, lat, lon)
+        if location_context.get("lat") is not None and location_context.get("lon") is not None:
+            lat, lon = location_context["lat"], location_context["lon"]
 
     if intent == "general" and not is_local_query:
         # Subtle boost for general queries to prefer Indian content
@@ -327,21 +335,23 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
     image_query_for_web = clean_image_query(en_query_for_web)
 
     # ── Step 1.5: Location Enhancement ────────────────────
-    if is_local_query and lat and lon:
+    if is_local_query and lat is not None and lon is not None:
         # For local queries, we want to prioritize results from the user's vicinity.
         # We'll append a "near [lat, lon]" hint to the query for the web search engines.
         # If in advanced mode, we try to be even more specific.
         
-        location_hint = f"{lat},{lon}"
+        location_hint = location_context.get("label") or f"{lat},{lon}"
         
         # Try to get city name for better search (Mocking a simple lookup or using coords)
         # In a real-world scenario, we'd use a geocoding service here.
         # For now, we'll use the coordinates which most search engines understand.
         
-        if advanced_mode:
-            en_query = f"{en_query} in my local market near {location_hint}"
-        else:
-            en_query = f"{en_query} near {location_hint}"
+        en_query = f"{en_query} near {location_hint}"
+        en_query_for_web = en_query
+        image_query_for_web = clean_image_query(en_query_for_web)
+        nearby_results = await local_places_service.search_nearby(
+            query=query, lat=lat, lon=lon, limit=max(limit, 12)
+        )
             
         logger.info(f"[Brain] Local enhancement triggered: {en_query}")
 
@@ -349,8 +359,8 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
     # Normalize: "Weather in Delhi" == "delhi weather" → same cache key
     normalized = normalize_query(en_query)
     # Round lat/lon to 2 decimal places (approx 1km accuracy) for cache stability
-    loc_suffix = f":{round(lat, 2)}:{round(lon, 2)}" if lat and lon else ""
-    cache_key = CacheManager.make_key("brain:search:v7", detected_lang, output_language, normalized, page, intent, filter, "advanced" if advanced_mode else "standard", limit) + loc_suffix
+    loc_suffix = f":{round(lat, 2)}:{round(lon, 2)}" if lat is not None and lon is not None else ""
+    cache_key = CacheManager.make_key("brain:search:v8", detected_lang, output_language, normalized, page, intent, filter, "advanced" if advanced_mode else "standard", limit) + loc_suffix
     
     # Record this query for hot cache warming
     hot_query_store.record_query(normalized)
@@ -417,8 +427,10 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
         # 4. Google (Scraper)
         tasks.append(asyncio.create_task(google_client.search(en_query, max_results=MAX_WEB_RESULTS)))
 
-        # 5. Wikipedia (Reliable)
-        tasks.append(asyncio.create_task(wiki_client.search(en_query, max_results=5)))
+        # Wikipedia is supplemental, not the primary index. Local searches need
+        # real nearby businesses rather than encyclopedia pages.
+        if not is_local_query:
+            tasks.append(asyncio.create_task(wiki_client.search(en_query, max_results=2)))
     
         # 4. News API (If News Intent)
         if intent == "news":
@@ -432,6 +444,9 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
     done, pending = await asyncio.wait(tasks, timeout=PARALLEL_TIMEOUT) if tasks else (set(), set())
     
     search_collections = []
+    if nearby_results:
+        search_collections.append(nearby_results)
+        sources_used.append("openstreetmap")
     
     # ── Level 2.5: Direct Hit Detection ───────────────────
     direct_hits = get_direct_hit(en_query)
@@ -498,7 +513,7 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
             filtered_results = merge_service.merge_and_deduplicate([filtered_results, fallback_results])
 
     # ── Level 5: Rank first, THEN check quality ──────────
-    final_ranked = ranking_service.rank(filtered_results, en_query)
+    final_ranked = ranking_service.rank(filtered_results, en_query, lat=lat, lon=lon)
 
     # ── Level 5.5: Paid Fallback Chain — Only if quality is insufficient ──
     # quality_check reads _rank_score which is set by rank(), so must come AFTER ranking
@@ -515,7 +530,7 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
                 if src and src not in sources_used:
                     sources_used.append(src)
             combined = merge_service.merge_and_deduplicate([final_ranked, api_res])
-            final_ranked = ranking_service.rank(combined, en_query)
+            final_ranked = ranking_service.rank(combined, en_query, lat=lat, lon=lon)
             quota = api_client.get_quota_status()
         else:
             logger.warning("[Brain] Paid fallback returned no results. Staying with free results.")
@@ -584,7 +599,8 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
         "sources_used": sources_used,
         "quota_status": quota,
         "took_ms": took_ms,
-        "from_cache": False
+        "from_cache": False,
+        "location": location_context or None
     }
 
     # ── Step 7: Cache with dynamic TTL ────────────────────

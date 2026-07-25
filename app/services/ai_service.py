@@ -123,6 +123,8 @@ def gemini_chat(query, docs, lang="English", pdf_content=None, intent="general",
         system_msg = f"""You are IndiaSearch Advanced Research. Produce a Perplexity-style answer in {lang}.
         Use the supplied sources only, cite claims with [1], [2], and organize the response with short sections:
         Overview, Key points, Details, Sources to verify. Be direct, useful, and complete.
+        For local results, compare supplied distance, address, and opening-hours facts and recommend
+        the nearest useful options first. Never invent ratings, prices, hours, or business details.
         The full final answer must be in {lang}, even if sources are in another language.
         """
     else:
@@ -161,6 +163,8 @@ def groq_chat(query, docs, lang="English", pdf_content=None, intent="general", h
     elif intent == "advanced":
         system_msg = f"""You are IndiaSearch Advanced Research. Produce a Perplexity-style answer in {lang}.
         Use citations [1], [2]. Include short sections: Overview, Key points, Details, Sources to verify.
+        For local searches, prioritize verified distance and address facts. Never invent ratings,
+        prices, opening hours, or business details.
         The full final answer must be in {lang}, even if sources are in another language.
         """
     else:

@@ -482,7 +482,7 @@ async def delete_med(media_id: int, session_token: str):
 
 # --- AI Mode Endpoint (Google-style AI answers) ---
 @app.get("/ai-mode")
-async def ai_mode_search(q: str, lang: str = "en"):
+async def ai_mode_search(q: str, lang: str = "en", advanced_mode: bool = False, lat: float | None = None, lon: float | None = None):
     """
     Google-style AI Mode: Returns AI-generated answer with sources and images.
     Falls back to the parallel search pipeline (DuckDuckGo + web) when
@@ -514,10 +514,10 @@ async def ai_mode_search(q: str, lang: str = "en"):
                     force_ai=False,
                     pdf_content=None,
                     age_verified=False,
-                    advanced_mode=False,
+                    advanced_mode=advanced_mode,
                     history=None,
-                    lat=None,
-                    lon=None,
+                    lat=lat,
+                    lon=lon,
                     limit=10,
                 )
                 # pipeline_response is a dict with a "results" key

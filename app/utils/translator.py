@@ -89,8 +89,10 @@ import requests
 
 def free_google_translate(text, target_lang):
     try:
-        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={target_lang}&dt=t&q={text}"
-        res = requests.get(url, timeout=3)
+        url = "https://translate.googleapis.com/translate_a/single"
+        res = requests.get(url, params={
+            "client": "gtx", "sl": "auto", "tl": target_lang, "dt": "t", "q": text
+        }, timeout=5)
         if res.status_code == 200:
             return "".join([item[0] for item in res.json()[0]])
     except Exception as e:

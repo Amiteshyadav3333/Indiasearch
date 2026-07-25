@@ -140,7 +140,7 @@ function autoExpand(t) {
     t.style.height = (t.scrollHeight) + 'px';
 }
 
-function searchAI() {
+async function searchAI() {
     if (!aiSearchInput || !aiSearchInput.value.trim()) return;
     const val = aiSearchInput.value.trim();
     if (searchInput) searchInput.value = val;
@@ -148,6 +148,9 @@ function searchAI() {
     aiSearchInput.value = "";
     aiSearchInput.style.height = "auto";
     aiSearchInput.focus();
+    if (advancedMode && !appState.location) {
+      await requestLocation({ silent: true });
+    }
     search(1, true);
 }
 
@@ -905,16 +908,16 @@ document.addEventListener("click", (event) => {
 });
 
 // ── Location Services ──
-function requestLocation() {
+function requestLocation({ silent = false } = {}) {
     if (!navigator.geolocation) {
-        alert("Geolocation is not supported by your browser");
-        return;
+        if (!silent) alert("Geolocation is not supported by your browser");
+        return Promise.resolve(null);
     }
 
     const btn = document.getElementById("locationButton");
     if (btn) btn.classList.add("loading-loc");
 
-    navigator.geolocation.getCurrentPosition(
+    return new Promise((resolve) => navigator.geolocation.getCurrentPosition(
         (position) => {
             const { latitude, longitude } = position.coords;
             appState.location = { lat: latitude, lon: longitude };
@@ -928,15 +931,17 @@ function requestLocation() {
             
             console.log("Location updated:", appState.location);
             // Optional: Show a small toast or update UI to show city name
-            if (activeQuery) search(1, false, { replaceHistory: true });
+            if (activeQuery && !silent) search(1, false, { replaceHistory: true });
+            resolve(appState.location);
         },
         (error) => {
             console.error("Location error:", error);
             if (btn) btn.classList.remove("loading-loc");
-            alert("Unable to retrieve your location. Please check your browser permissions.");
+            if (!silent) alert("Unable to retrieve your location. Please check your browser permissions.");
+            resolve(null);
         },
-        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
-    );
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 300000 }
+    ));
 }
 
 // Auto-load location if already granted in this session
@@ -1595,7 +1600,7 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
     document.documentElement.setAttribute("data-ai-mode", aiMode ? "true" : "false");
     
     // Use new /ai-mode endpoint for true AI mode
-    if (aiMode) {
+    if (aiMode && !advancedMode) {
       const aiRes = await fetchWithApiFallback(`/ai-mode?q=${encodeURIComponent(query)}&lang=${targetLang}`);
       const aiData = await aiRes.json();
 

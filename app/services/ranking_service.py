@@ -20,6 +20,7 @@ SOURCE_WEIGHTS = {
     "elasticsearch":  1.5,
     "google":         1.4,
     "wikipedia":      1.3,
+    "openstreetmap":  2.2,
     "duckduckgo":    1.2,
     "yahoo":         1.0,
     "serpapi":       0.9,   # paid API ironically ranks lower (last resort)
@@ -78,7 +79,7 @@ def _domain_authority(url: str) -> float:
     return score
 
 
-def rank(results: list, query: str) -> list:
+def rank(results: list, query: str, lat=None, lon=None) -> list:
     """
     Score and sort results by composite relevance.
     
@@ -98,6 +99,8 @@ def rank(results: list, query: str) -> list:
         boost         = r.get("_boost", 0) * 0.5
         elastic_norm  = (r.get("score", 0) / max_elastic) * 0.2
         authority     = _domain_authority(r.get("url", ""))
+        distance = r.get("distance_km")
+        proximity = max(0.0, 3.0 - min(float(distance), 15.0) * 0.2) if distance is not None else 0.0
 
         r["_rank_score"] = (
             query_match   * 2.0
@@ -105,6 +108,7 @@ def rank(results: list, query: str) -> list:
             + boost
             + elastic_norm
             + authority
+            + proximity
         )
 
     ranked = sorted(results, key=lambda r: r["_rank_score"], reverse=True)
