@@ -74,7 +74,6 @@ if (searchInput) {
   });
 }
 
-let advancedMode = false;
 let chatHistory = []; // Global chat history for AI Mode
 
 /** ── AI Mode Manager ── **/
@@ -93,12 +92,6 @@ function enterAiMode() {
 
 function exitAiModePanel() { exitAiMode(); }
 
-function enterAdvancedSearch() {
-    advancedMode = true;
-    enterAiMode();
-    if (aiSearchInput) aiSearchInput.placeholder = "Advanced AI Search: Only 2-4 verified sources...";
-}
-
 function enterNutritionScan() {
     if (resultsBox) resultsBox.innerHTML = "";
     if (aiSummaryBox) aiSummaryBox.innerHTML = "";
@@ -108,7 +101,6 @@ function enterNutritionScan() {
 }
 
 function exitAiMode() {
-    advancedMode = false;
     if (aiSearchInput) aiSearchInput.placeholder = "Puchho jo aapke mann mein hai... (AI Mode)";
     if (searchBoxStandard) searchBoxStandard.style.display = "flex";
     if (searchBoxAi) {
@@ -148,9 +140,6 @@ async function searchAI() {
     aiSearchInput.value = "";
     aiSearchInput.style.height = "auto";
     aiSearchInput.focus();
-    if (advancedMode && !appState.location) {
-      await requestLocation({ silent: true });
-    }
     search(1, true);
 }
 
@@ -440,22 +429,17 @@ let currentFilter = "all";
 function setFilter(type) {
   currentFilter = type;
   
-  if (type === "advanced") {
-      advancedMode = true;
-      enterAiMode();
-  } else if (type === "nutrition") {
-      advancedMode = false;
+  if (type === "nutrition") {
       enterNutritionScan();
-  } else {
-      advancedMode = false;
   }
 
   applyFilterActiveState(type);
 
   const defaultQueries = {
     news: "latest india news",
+    maps: "famous places near me",
     weather: "weather in Delhi",
-    score: "live cricket score",
+    score: "ICC live cricket score",
     stock: "reliance stock price",
     sarkari: "latest government schemes and portals",
     jobs: "latest sarkari and private jobs",
@@ -474,7 +458,154 @@ function setFilter(type) {
     return;
   }
 
+  closeMoreServices();
+  if (type === "maps") {
+    renderMapsExperience();
+    return;
+  }
   search(1, false);
+}
+
+function activateAskAi() {
+  closeMoreServices();
+  currentFilter = "all";
+  applyFilterActiveState("askAI");
+  enterAiMode();
+}
+
+function toggleMoreServices(event) {
+  if (event) event.stopPropagation();
+  const menu = document.getElementById("moreServicesMenu");
+  const button = document.getElementById("moreServicesButton");
+  if (!menu || !button) return;
+  const willOpen = menu.hidden;
+  menu.hidden = !willOpen;
+  button.setAttribute("aria-expanded", String(willOpen));
+}
+
+function closeMoreServices() {
+  const menu = document.getElementById("moreServicesMenu");
+  const button = document.getElementById("moreServicesButton");
+  if (menu) menu.hidden = true;
+  if (button) button.setAttribute("aria-expanded", "false");
+}
+
+document.addEventListener("click", event => {
+  if (!event.target.closest("#moreServicesMenu, #moreServicesButton")) closeMoreServices();
+});
+
+let indiaMap = null;
+let mapRouteLayer = null;
+
+function haversineKm(a, b) {
+  const rad = value => value * Math.PI / 180;
+  const dLat = rad(b.lat - a.lat);
+  const dLon = rad(b.lon - a.lon);
+  const value = Math.sin(dLat / 2) ** 2
+    + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLon / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
+}
+
+async function renderMapsExperience() {
+  if (heroSection) heroSection.classList.add("hidden");
+  if (searchFiltersDiv) searchFiltersDiv.style.display = "flex";
+  if (trendingContainer) trendingContainer.style.display = "none";
+  if (historyBox) historyBox.style.display = "none";
+  if (aiSummaryBox) aiSummaryBox.innerHTML = "";
+  if (paginationContainer) paginationContainer.innerHTML = "";
+  resultsBox.innerHTML = `
+    <section class="maps-experience">
+      <div class="map-head">
+        <div><span class="eyebrow">OpenStreetMap • Live location</span>
+          <h2>Aapke aas-paas ka Bharat</h2>
+          <p>Road dekhiye, famous jagah khojiye aur live location se distance janiye.</p>
+        </div>
+        <button class="locate-me-btn" onclick="renderMapsExperience()">⌖ Meri location</button>
+      </div>
+      <div class="map-layout">
+        <div id="indiaMap" class="india-map"><div class="map-loading">Location mil rahi hai…</div></div>
+        <aside><h3>Nearby famous places</h3><div id="nearbyPlaces" class="nearby-list">
+          <div class="place-skeleton"></div><div class="place-skeleton"></div>
+        </div></aside>
+      </div>
+      <p class="map-attribution-note">Map data © OpenStreetMap contributors. Road distance available hone par route dikhaya jaata hai.</p>
+    </section>`;
+
+  if (!navigator.geolocation) return showMapFallback("Aapka browser live location support nahi karta.");
+  navigator.geolocation.getCurrentPosition(
+    position => initializeMap(position.coords.latitude, position.coords.longitude),
+    () => showMapFallback("Location permission on karke “Meri location” dobara dabaiye."),
+    { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 }
+  );
+}
+
+function showMapFallback(message) {
+  const mapNode = document.getElementById("indiaMap");
+  const list = document.getElementById("nearbyPlaces");
+  if (mapNode) mapNode.innerHTML = `<div class="map-permission"><span>📍</span><strong>Live location chahiye</strong><p>${message}</p></div>`;
+  if (list) list.innerHTML = `<p class="muted">Permission milne ke baad nearby places yahan dikhenge.</p>`;
+}
+
+async function initializeMap(lat, lon) {
+  const mapNode = document.getElementById("indiaMap");
+  if (!mapNode || typeof L === "undefined") return showMapFallback("Map library load nahi ho paayi.");
+  appState.location = { lat, lon };
+  localStorage.setItem("userLocation", JSON.stringify(appState.location));
+  if (indiaMap) indiaMap.remove();
+  indiaMap = L.map("indiaMap").setView([lat, lon], 14);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19, attribution: "&copy; OpenStreetMap contributors"
+  }).addTo(indiaMap);
+  L.circleMarker([lat, lon], { radius: 9, color: "#fff", weight: 3, fillColor: "#2563eb", fillOpacity: 1 })
+    .addTo(indiaMap).bindPopup("Aap yahan hain").openPopup();
+  await loadNearbyPlaces(lat, lon);
+}
+
+async function loadNearbyPlaces(lat, lon) {
+  const list = document.getElementById("nearbyPlaces");
+  const query = `[out:json][timeout:15];(nwr(around:8000,${lat},${lon})["tourism"~"attraction|museum|viewpoint|zoo"];nwr(around:8000,${lat},${lon})["historic"];nwr(around:8000,${lat},${lon})["leisure"="park"];);out center 15;`;
+  try {
+    const response = await fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`);
+    if (!response.ok) throw new Error("places unavailable");
+    const data = await response.json();
+    const places = data.elements.map(item => {
+      const pLat = item.lat || item.center?.lat;
+      const pLon = item.lon || item.center?.lon;
+      return { name: item.tags?.name || item.tags?.["name:hi"] || "Famous place", lat: pLat, lon: pLon,
+        type: item.tags?.tourism || item.tags?.historic || item.tags?.leisure || "landmark",
+        airKm: haversineKm({ lat, lon }, { lat: pLat, lon: pLon }) };
+    }).filter(place => place.lat && place.lon).sort((a, b) => a.airKm - b.airKm).slice(0, 6);
+    places.forEach(place => L.marker([place.lat, place.lon]).addTo(indiaMap).bindPopup(`<strong>${escapeHtml(place.name)}</strong>`));
+    list.innerHTML = places.length ? places.map((place, index) => `
+      <button class="nearby-place" data-lat="${place.lat}" data-lon="${place.lon}">
+        <span class="place-number">${index + 1}</span><span><strong>${escapeHtml(place.name)}</strong>
+        <small>${escapeHtml(place.type)} • ${place.airKm.toFixed(1)} km seedhi doori</small></span><span class="route-arrow">→</span>
+      </button>`).join("") : `<p class="muted">8 km ke andar famous place nahi mila.</p>`;
+    list.querySelectorAll(".nearby-place").forEach((button, index) => {
+      button.addEventListener("click", () => showRoadDistance(places[index], button));
+    });
+  } catch {
+    list.innerHTML = `<p class="muted">Nearby places abhi load nahi ho paaye. Map aur roads phir bhi use kar sakte hain.</p>`;
+  }
+}
+
+async function showRoadDistance(place, button) {
+  if (!appState.location || !indiaMap) return;
+  const { lat, lon } = appState.location;
+  button.classList.add("loading");
+  try {
+    const response = await fetch(`https://router.project-osrm.org/route/v1/driving/${lon},${lat};${place.lon},${place.lat}?overview=full&geometries=geojson`);
+    const route = (await response.json()).routes?.[0];
+    if (!route) throw new Error("route unavailable");
+    if (mapRouteLayer) indiaMap.removeLayer(mapRouteLayer);
+    mapRouteLayer = L.geoJSON(route.geometry, { style: { color: "#ff6b35", weight: 6, opacity: .85 } }).addTo(indiaMap);
+    indiaMap.fitBounds(mapRouteLayer.getBounds(), { padding: [35, 35] });
+    button.querySelector("small").textContent = `${(route.distance / 1000).toFixed(1)} km road • ${Math.round(route.duration / 60)} min`;
+  } catch {
+    button.querySelector("small").textContent = `${place.airKm.toFixed(1)} km approx.`;
+  } finally {
+    button.classList.remove("loading");
+  }
 }
 
 // ═══════════════════════════════════════════
@@ -1365,7 +1496,6 @@ async function resetToHome(options = {}) {
   chatHistory = [];
   activeQuery = "";
   currentFilter = "all";
-  advancedMode = false;
   searchInput.value = "";
   updateClearBtn();
   resultsBox.innerHTML = "";
@@ -1600,7 +1730,7 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
     document.documentElement.setAttribute("data-ai-mode", aiMode ? "true" : "false");
     
     // Use new /ai-mode endpoint for true AI mode
-    if (aiMode && !advancedMode) {
+    if (aiMode) {
       const aiRes = await fetchWithApiFallback(`/ai-mode?q=${encodeURIComponent(query)}&lang=${targetLang}`);
       const aiData = await aiRes.json();
 
@@ -1623,7 +1753,6 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
         lang: targetLang,
         output_lang: LANGUAGE_NAMES[targetLang] || "English",
         ai_mode: String(aiMode),
-        advanced_mode: String(advancedMode),
         history: aiMode ? JSON.stringify(chatHistory) : "",
         limit: String(appSettings.resultsCount),
         age_verified: String(appSettings.safeSearch === "off")
@@ -2139,7 +2268,6 @@ window.addEventListener("popstate", async (event) => {
 
     if (state.view === "search" && state.query) {
       currentFilter = state.filter || "all";
-      advancedMode = false;
       if (searchInput) searchInput.value = state.query;
       applyFilterActiveState(currentFilter);
       await search(state.page || 1, Boolean(state.aiMode), { skipHistory: true });

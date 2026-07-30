@@ -105,12 +105,8 @@
 
     <!-- ═══ SEARCH FILTERS ═══ -->
     <div id="searchFilters" class="filter-bar" style="display:none;">
-      <button class="filter-pill" data-filter="advanced" onclick="setFilter('advanced')">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <polygon
-            points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-        </svg>
-        Advanced
+      <button class="filter-pill ai-tab primary-ai" data-filter="askAI" onclick="activateAskAi()">
+        <span aria-hidden="true">✦</span> Ask AI
       </button>
       <button class="filter-pill active" data-filter="all" onclick="setFilter('all')">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -143,6 +139,19 @@
         </svg>
         Videos
       </button>
+      <button class="filter-pill" data-filter="maps" onclick="setFilter('maps')">
+        <span aria-hidden="true">⌖</span> Maps
+      </button>
+      <button class="filter-pill more-trigger" id="moreServicesButton" type="button" onclick="toggleMoreServices(event)"
+        aria-expanded="false" aria-controls="moreServicesMenu">
+        <span aria-hidden="true">⊞</span> More <span class="more-chevron">⌄</span>
+      </button>
+      <div class="more-services-menu" id="moreServicesMenu" hidden>
+        <div class="more-menu-heading">
+          <div><strong>Bharat Services</strong><span>Roz ke kaam, ek hi jagah</span></div>
+          <button type="button" onclick="closeMoreServices()" aria-label="Close services">×</button>
+        </div>
+        <div class="more-services-grid">
       <button class="filter-pill" data-filter="weather" onclick="setFilter('weather')">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <path d="M17.5 19a3.5 3.5 0 1 1 0-7c.1 0 .2 0 .3 0a5 5 0 1 1 9.2 2" />
@@ -227,12 +236,8 @@
         </svg>
         Nutrition
       </button>
-      <button class="filter-pill ai-tab" onclick="enterAiMode()">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-        </svg>
-        Ask AI
-      </button>
+        </div>
+      </div>
     </div>
 
     <!-- ═══ HISTORY ═══ -->

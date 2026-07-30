@@ -48,6 +48,12 @@ TRUSTED_DOMAINS = {
     "stackoverflow.com": 0.2,
 }
 
+INDIA_PUBLIC_INTEREST_DOMAINS = (
+    "gov.in", "nic.in", "ac.in", "res.in", "org.in", "co.in",
+    "uidai.gov.in", "incometax.gov.in", "indianrail.gov.in", "irctc.co.in",
+    "ecourts.gov.in", "data.gov.in", "ncs.gov.in", "agmarknet.gov.in",
+)
+
 
 def _query_match_score(result: dict, query: str) -> float:
     """Score based on how many query terms appear in title + snippet."""
@@ -79,6 +85,23 @@ def _domain_authority(url: str) -> float:
     return score
 
 
+def _india_relevance(url: str, title: str = "", snippet: str = "") -> float:
+    """Promote Indian sources while retaining useful international results."""
+    try:
+        domain = urlparse(url).netloc.replace("www.", "").lower()
+    except Exception:
+        domain = ""
+    text = f"{title} {snippet}".lower()
+    score = 0.0
+    if domain.endswith(".in") or any(domain.endswith(d) for d in INDIA_PUBLIC_INTEREST_DOMAINS):
+        score += 1.15
+    if domain.endswith(("gov.in", "nic.in")):
+        score += 0.85
+    india_terms = ("india", "bharat", "भारतीय", "भारत", "indian", "sarkari", "सरकारी")
+    score += min(0.45, sum(term in text for term in india_terms) * 0.15)
+    return score
+
+
 def rank(results: list, query: str, lat=None, lon=None) -> list:
     """
     Score and sort results by composite relevance.
@@ -99,6 +122,7 @@ def rank(results: list, query: str, lat=None, lon=None) -> list:
         boost         = r.get("_boost", 0) * 0.5
         elastic_norm  = (r.get("score", 0) / max_elastic) * 0.2
         authority     = _domain_authority(r.get("url", ""))
+        india_signal  = _india_relevance(r.get("url", ""), r.get("title", ""), r.get("snippet", ""))
         distance = r.get("distance_km")
         proximity = max(0.0, 3.0 - min(float(distance), 15.0) * 0.2) if distance is not None else 0.0
 
@@ -108,6 +132,7 @@ def rank(results: list, query: str, lat=None, lon=None) -> list:
             + boost
             + elastic_norm
             + authority
+            + india_signal
             + proximity
         )
 
