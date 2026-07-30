@@ -496,6 +496,8 @@ document.addEventListener("click", event => {
 
 let indiaMap = null;
 let mapRouteLayer = null;
+let mapMarkersLayer = null;
+let activeRouteRequest = 0;
 
 function haversineKm(a, b) {
   const rad = value => value * Math.PI / 180;
@@ -506,7 +508,14 @@ function haversineKm(a, b) {
   return 6371 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
 }
 
-async function renderMapsExperience() {
+function parseRouteQuery(query = "") {
+  const cleaned = query.replace(/\b(distance|road|route|kitna|door|km)\b/gi, " ").replace(/\s+/g, " ").trim();
+  const match = cleaned.match(/^(.+?)\s+(?:to|se)\s+(.+)$/i);
+  return match ? { from: match[1].trim(), to: match[2].trim() } : { from: "", to: "" };
+}
+
+async function renderMapsExperience(routeQuery = "") {
+  const parsedRoute = parseRouteQuery(routeQuery || searchInput?.value || "");
   if (heroSection) heroSection.classList.add("hidden");
   if (searchFiltersDiv) searchFiltersDiv.style.display = "flex";
   if (trendingContainer) trendingContainer.style.display = "none";
@@ -514,51 +523,195 @@ async function renderMapsExperience() {
   if (aiSummaryBox) aiSummaryBox.innerHTML = "";
   if (paginationContainer) paginationContainer.innerHTML = "";
   resultsBox.innerHTML = `
-    <section class="maps-experience">
+    <section class="maps-experience" aria-label="IndiaSearch road map">
       <div class="map-head">
-        <div><span class="eyebrow">OpenStreetMap • Live location</span>
-          <h2>Aapke aas-paas ka Bharat</h2>
-          <p>Road dekhiye, famous jagah khojiye aur live location se distance janiye.</p>
+        <div><span class="eyebrow">Leaflet • OpenStreetMap • Live routes</span>
+          <h2>Safar ka sahi raasta</h2>
+          <p>Do shehar likhiye—road route, distance aur driving time turant dekhiye.</p>
         </div>
-        <button class="locate-me-btn" onclick="renderMapsExperience()">⌖ Meri location</button>
+        <button class="locate-me-btn" type="button" onclick="useLiveLocation()">⌖ Meri location</button>
+      </div>
+      <form class="route-planner" id="routePlanner" onsubmit="searchMapRoute(event)">
+        <label class="route-field"><span class="route-dot start"></span><span class="route-field-copy">Kahan se</span>
+          <input id="routeFrom" value="${escapeHtml(parsedRoute.from)}" placeholder="Azamgarh" autocomplete="off" required>
+        </label>
+        <button class="swap-route-btn" type="button" onclick="swapRouteFields()" aria-label="Swap locations">⇅</button>
+        <label class="route-field"><span class="route-dot end"></span><span class="route-field-copy">Kahan tak</span>
+          <input id="routeTo" value="${escapeHtml(parsedRoute.to)}" placeholder="Delhi" autocomplete="off" required>
+        </label>
+        <button class="find-route-btn" type="submit"><span>Raasta dikhao</span><b>→</b></button>
+      </form>
+      <div class="route-status" id="routeStatus" aria-live="polite">
+        <span class="status-icon">⌁</span><span>Example: <button type="button" onclick="setRouteExample('Azamgarh','Delhi')">Azamgarh se Delhi</button></span>
       </div>
       <div class="map-layout">
-        <div id="indiaMap" class="india-map"><div class="map-loading">Location mil rahi hai…</div></div>
-        <aside><h3>Nearby famous places</h3><div id="nearbyPlaces" class="nearby-list">
-          <div class="place-skeleton"></div><div class="place-skeleton"></div>
-        </div></aside>
+        <div class="map-stage">
+          <div id="indiaMap" class="india-map"></div>
+          <div class="map-badge">INDIA ROAD MAP</div>
+          <button class="map-reset-btn" type="button" onclick="resetMapView()" title="Show India">⌂</button>
+        </div>
+        <aside class="journey-panel">
+          <div id="journeySummary" class="journey-empty">
+            <span class="journey-art">↝</span><h3>Aapka safar</h3>
+            <p>Route search karne par distance, time aur road details yahan dikhenge.</p>
+          </div>
+          <div class="nearby-section" id="nearbySection" hidden>
+            <div class="aside-heading"><h3>Nearby famous places</h3><span>8 km</span></div>
+            <div id="nearbyPlaces" class="nearby-list"></div>
+          </div>
+        </aside>
       </div>
-      <p class="map-attribution-note">Map data © OpenStreetMap contributors. Road distance available hone par route dikhaya jaata hai.</p>
+      <p class="map-attribution-note">Map © OpenStreetMap contributors • Route © OSRM • Distance driving route ke hisaab se.</p>
     </section>`;
 
-  if (!navigator.geolocation) return showMapFallback("Aapka browser live location support nahi karta.");
-  navigator.geolocation.getCurrentPosition(
-    position => initializeMap(position.coords.latitude, position.coords.longitude),
-    () => showMapFallback("Location permission on karke “Meri location” dobara dabaiye."),
-    { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 }
-  );
+  initializeIndiaMap();
+  if (parsedRoute.from && parsedRoute.to) searchMapRoute();
 }
 
-function showMapFallback(message) {
+function initializeIndiaMap() {
   const mapNode = document.getElementById("indiaMap");
-  const list = document.getElementById("nearbyPlaces");
-  if (mapNode) mapNode.innerHTML = `<div class="map-permission"><span>📍</span><strong>Live location chahiye</strong><p>${message}</p></div>`;
-  if (list) list.innerHTML = `<p class="muted">Permission milne ke baad nearby places yahan dikhenge.</p>`;
-}
-
-async function initializeMap(lat, lon) {
-  const mapNode = document.getElementById("indiaMap");
-  if (!mapNode || typeof L === "undefined") return showMapFallback("Map library load nahi ho paayi.");
-  appState.location = { lat, lon };
-  localStorage.setItem("userLocation", JSON.stringify(appState.location));
+  if (!mapNode) return;
+  if (typeof L === "undefined") {
+    mapNode.innerHTML = `<div class="map-permission"><span>🗺️</span><strong>Map load nahi hua</strong><p>Internet check karke page refresh karein.</p></div>`;
+    setRouteStatus("Map library load nahi ho paayi.", "error");
+    return;
+  }
   if (indiaMap) indiaMap.remove();
-  indiaMap = L.map("indiaMap").setView([lat, lon], 14);
+  indiaMap = L.map("indiaMap", { zoomControl: false, minZoom: 4, maxZoom: 19 }).setView([22.8, 79.2], 5);
+  L.control.zoom({ position: "bottomright", zoomInTitle: "Zoom in", zoomOutTitle: "Zoom out" }).addTo(indiaMap);
+  L.control.scale({ imperial: false, position: "bottomleft" }).addTo(indiaMap);
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19, attribution: "&copy; OpenStreetMap contributors"
   }).addTo(indiaMap);
-  L.circleMarker([lat, lon], { radius: 9, color: "#fff", weight: 3, fillColor: "#2563eb", fillOpacity: 1 })
-    .addTo(indiaMap).bindPopup("Aap yahan hain").openPopup();
-  await loadNearbyPlaces(lat, lon);
+  mapMarkersLayer = L.layerGroup().addTo(indiaMap);
+  setTimeout(() => indiaMap?.invalidateSize(), 80);
+}
+
+function resetMapView() {
+  if (indiaMap) indiaMap.flyTo([22.8, 79.2], 5, { duration: 1.1 });
+}
+
+function setRouteStatus(message, type = "") {
+  const status = document.getElementById("routeStatus");
+  if (!status) return;
+  status.className = `route-status ${type}`.trim();
+  status.innerHTML = `<span class="status-icon">${type === "loading" ? "◌" : type === "error" ? "!" : "✓"}</span><span>${escapeHtml(message)}</span>`;
+}
+
+function setRouteExample(from, to) {
+  document.getElementById("routeFrom").value = from;
+  document.getElementById("routeTo").value = to;
+  searchMapRoute();
+}
+
+function swapRouteFields() {
+  const from = document.getElementById("routeFrom");
+  const to = document.getElementById("routeTo");
+  [from.value, to.value] = [to.value, from.value];
+}
+
+function useLiveLocation() {
+  if (!navigator.geolocation) return setRouteStatus("Browser live location support nahi karta.", "error");
+  setRouteStatus("Aapki live location mil rahi hai…", "loading");
+  navigator.geolocation.getCurrentPosition(async position => {
+    const { latitude: lat, longitude: lon } = position.coords;
+    appState.location = { lat, lon };
+    localStorage.setItem("userLocation", JSON.stringify(appState.location));
+    document.getElementById("routeFrom").value = "Meri live location";
+    document.getElementById("routeFrom").dataset.lat = String(lat);
+    document.getElementById("routeFrom").dataset.lon = String(lon);
+    mapMarkersLayer?.clearLayers();
+    L.circleMarker([lat, lon], { radius: 9, color: "#fff", weight: 3, fillColor: "#2563eb", fillOpacity: 1 })
+      .addTo(mapMarkersLayer).bindPopup("Aap yahan hain").openPopup();
+    indiaMap.flyTo([lat, lon], 14, { duration: 1.2 });
+    setRouteStatus("Live location tayyar hai. Destination likhiye.", "success");
+    document.getElementById("nearbySection").hidden = false;
+    await loadNearbyPlaces(lat, lon);
+  }, () => setRouteStatus("Location permission allow karke dobara try karein.", "error"),
+  { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
+}
+
+async function geocodePlace(name, input) {
+  if (input?.dataset.lat && input?.dataset.lon && name === "Meri live location") {
+    return { lat: Number(input.dataset.lat), lon: Number(input.dataset.lon), name };
+  }
+  const query = /india/i.test(name) ? name : `${name}, India`;
+  const response = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=in&limit=1&q=${encodeURIComponent(query)}`,
+    { headers: { "Accept-Language": currentLanguage || "en" } });
+  if (!response.ok) throw new Error(`${name} nahi mila`);
+  const place = (await response.json())[0];
+  if (!place) throw new Error(`${name} nahi mila`);
+  return { lat: Number(place.lat), lon: Number(place.lon), name: place.display_name.split(",").slice(0, 2).join(",") };
+}
+
+function routeMarker(label, kind) {
+  return L.divIcon({
+    className: "route-map-marker",
+    html: `<span class="${kind}"><b>${escapeHtml(label)}</b></span>`,
+    iconSize: [36, 36], iconAnchor: [18, 34], popupAnchor: [0, -32]
+  });
+}
+
+function formatDriveTime(seconds) {
+  const totalMinutes = Math.max(1, Math.round(seconds / 60));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return hours ? `${hours} hr ${minutes ? `${minutes} min` : ""}` : `${minutes} min`;
+}
+
+async function searchMapRoute(event) {
+  if (event) event.preventDefault();
+  if (!indiaMap) initializeIndiaMap();
+  const fromInput = document.getElementById("routeFrom");
+  const toInput = document.getElementById("routeTo");
+  const fromText = fromInput?.value.trim();
+  const toText = toInput?.value.trim();
+  if (!fromText || !toText) return setRouteStatus("Dono jagah ka naam likhiye.", "error");
+
+  const requestId = ++activeRouteRequest;
+  setRouteStatus(`${fromText} se ${toText} ka road route dhoondh rahe hain…`, "loading");
+  document.querySelector(".find-route-btn")?.classList.add("loading");
+  try {
+    const from = await geocodePlace(fromText, fromInput);
+    await new Promise(resolve => setTimeout(resolve, 1050));
+    const to = await geocodePlace(toText, toInput);
+    if (requestId !== activeRouteRequest) return;
+    const url = `https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=full&geometries=geojson&steps=true`;
+    const response = await fetch(url);
+    const data = await response.json();
+    const route = data.routes?.[0];
+    if (!response.ok || !route) throw new Error("Driving route abhi nahi mila");
+
+    if (mapRouteLayer) indiaMap.removeLayer(mapRouteLayer);
+    mapMarkersLayer.clearLayers();
+    mapRouteLayer = L.geoJSON(route.geometry, {
+      style: { color: "#ff6b35", weight: 7, opacity: .92, lineCap: "round", lineJoin: "round" }
+    }).addTo(indiaMap);
+    L.marker([from.lat, from.lon], { icon: routeMarker("A", "start") }).addTo(mapMarkersLayer).bindPopup(`<strong>${escapeHtml(from.name)}</strong>`);
+    L.marker([to.lat, to.lon], { icon: routeMarker("B", "end") }).addTo(mapMarkersLayer).bindPopup(`<strong>${escapeHtml(to.name)}</strong>`);
+    indiaMap.fitBounds(mapRouteLayer.getBounds(), { paddingTopLeft: [45, 45], paddingBottomRight: [45, 45], maxZoom: 13 });
+
+    const distanceKm = route.distance / 1000;
+    const steps = route.legs?.[0]?.steps || [];
+    const roadNames = [...new Set(steps.map(step => step.name).filter(Boolean))].slice(0, 4);
+    document.getElementById("journeySummary").className = "journey-summary";
+    document.getElementById("journeySummary").innerHTML = `
+      <div class="journey-route"><span>A</span><i></i><span>B</span></div>
+      <p class="journey-label">FASTEST ROAD ROUTE</p>
+      <h3>${escapeHtml(fromText)} <span>→</span> ${escapeHtml(toText)}</h3>
+      <div class="journey-stats">
+        <div><strong>${distanceKm.toFixed(distanceKm < 100 ? 1 : 0)} km</strong><span>Road distance</span></div>
+        <div><strong>${formatDriveTime(route.duration)}</strong><span>Estimated drive</span></div>
+      </div>
+      ${roadNames.length ? `<div class="road-list"><span>मुख्य roads</span>${roadNames.map(name => `<b>${escapeHtml(name)}</b>`).join("")}</div>` : ""}
+      <a class="open-navigation" target="_blank" rel="noopener" href="https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=${from.lat}%2C${from.lon}%3B${to.lat}%2C${to.lon}">Open navigation ↗</a>`;
+    setRouteStatus(`${distanceKm.toFixed(0)} km ka road route mil gaya.`, "success");
+    if (searchInput) searchInput.value = `${fromText} to ${toText} distance`;
+  } catch (error) {
+    setRouteStatus(error.message || "Route nahi mil paaya. City names check karein.", "error");
+  } finally {
+    document.querySelector(".find-route-btn")?.classList.remove("loading");
+  }
 }
 
 async function loadNearbyPlaces(lat, lon) {
@@ -621,6 +774,145 @@ async function translateText(text, targetLang) {
   } catch { return text; }
 }
 
+const screenTextSources = new WeakMap();
+const screenAttributeSources = new WeakMap();
+const screenTranslationCache = new Map();
+let screenTranslationObserver = null;
+let screenTranslationTimer = null;
+let screenTranslationVersion = 0;
+let screenTranslationApplying = false;
+let screenTranslationPending = false;
+
+function shouldTranslateElement(element) {
+  if (!element || element.nodeType !== Node.ELEMENT_NODE) return false;
+  return !element.closest(
+    "script,style,noscript,code,pre,select,option,.brand,.hero-logo,[data-no-translate]," +
+    ".result-url,.result-host,.source-domain,.prx-source-domain,.google-source-domain"
+  );
+}
+
+function isTranslatableScreenText(text) {
+  const clean = String(text || "").trim();
+  if (!clean || clean.length > 240) return false;
+  if (/^(https?:\/\/|www\.|[\d\s.,:%₹$€£+\-/→↗⌁✓!]+)$/i.test(clean)) return false;
+  return /[A-Za-z\u0900-\u097F\u0980-\u09FF\u0A00-\u0A7F\u0B80-\u0BFF\u0C00-\u0CFF\u0D00-\u0D7F]/.test(clean);
+}
+
+function rememberScreenSources(root = document.body) {
+  if (!root) return;
+  const elements = [];
+  if (root.nodeType === Node.ELEMENT_NODE) elements.push(root);
+  if (root.querySelectorAll) elements.push(...root.querySelectorAll("*"));
+
+  elements.forEach(element => {
+    if (!shouldTranslateElement(element)) return;
+    [...element.childNodes].forEach(node => {
+      if (node.nodeType === Node.TEXT_NODE && isTranslatableScreenText(node.nodeValue) && !screenTextSources.has(node)) {
+        screenTextSources.set(node, node.nodeValue);
+      }
+    });
+
+    const sources = screenAttributeSources.get(element) || {};
+    ["placeholder", "title", "aria-label"].forEach(attribute => {
+      const value = element.getAttribute?.(attribute);
+      if (value && isTranslatableScreenText(value) && sources[attribute] === undefined) {
+        sources[attribute] = value;
+      }
+    });
+    if (Object.keys(sources).length) screenAttributeSources.set(element, sources);
+  });
+}
+
+async function translateScreenValue(source, lang) {
+  if (lang === "en") return source;
+  const leading = source.match(/^\s*/)?.[0] || "";
+  const trailing = source.match(/\s*$/)?.[0] || "";
+  const clean = source.trim();
+  const cacheKey = `${lang}\u0000${clean}`;
+  if (!screenTranslationCache.has(cacheKey)) {
+    screenTranslationCache.set(cacheKey, (async () => {
+      try {
+        const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=${lang}&dt=t&q=${encodeURIComponent(clean)}`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error("translation unavailable");
+        const data = await response.json();
+        return data[0].map(item => item[0]).join("") || clean;
+      } catch {
+        return clean;
+      }
+    })());
+  }
+  return `${leading}${await screenTranslationCache.get(cacheKey)}${trailing}`;
+}
+
+async function applyScreenLanguage(lang = currentLanguage, root = document.body) {
+  if (!root) return;
+  screenTranslationApplying = true;
+  rememberScreenSources(root);
+  const version = ++screenTranslationVersion;
+  const jobs = [];
+
+  const elements = [];
+  if (root.nodeType === Node.ELEMENT_NODE) elements.push(root);
+  if (root.querySelectorAll) elements.push(...root.querySelectorAll("*"));
+
+  elements.forEach(element => {
+    if (!shouldTranslateElement(element)) return;
+    [...element.childNodes].forEach(node => {
+      const source = screenTextSources.get(node);
+      if (!source) return;
+      jobs.push(async () => {
+        const translated = await translateScreenValue(source, lang);
+        if (version === screenTranslationVersion && node.isConnected && node.nodeValue !== translated) {
+          node.nodeValue = translated;
+        }
+      });
+    });
+
+    const attributes = screenAttributeSources.get(element);
+    if (!attributes) return;
+    Object.entries(attributes).forEach(([attribute, source]) => {
+      jobs.push(async () => {
+        const translated = await translateScreenValue(source, lang);
+        if (version === screenTranslationVersion && element.isConnected && element.getAttribute(attribute) !== translated) {
+          element.setAttribute(attribute, translated);
+        }
+      });
+    });
+  });
+
+  try {
+    for (let index = 0; index < jobs.length; index += 6) {
+      await Promise.all(jobs.slice(index, index + 6).map(job => job()));
+      if (version !== screenTranslationVersion) return;
+    }
+  } finally {
+    screenTranslationApplying = false;
+    if (screenTranslationPending) {
+      screenTranslationPending = false;
+      clearTimeout(screenTranslationTimer);
+      screenTranslationTimer = setTimeout(() => applyScreenLanguage(currentLanguage), 80);
+    }
+  }
+}
+
+function initializeScreenTranslation() {
+  rememberScreenSources(document.body);
+  if (screenTranslationObserver) return;
+  screenTranslationObserver = new MutationObserver(mutations => {
+    if (screenTranslationApplying) {
+      screenTranslationPending = true;
+      return;
+    }
+    const addedRoots = mutations.flatMap(mutation => [...mutation.addedNodes])
+      .filter(node => node.nodeType === Node.ELEMENT_NODE);
+    addedRoots.forEach(rememberScreenSources);
+    clearTimeout(screenTranslationTimer);
+    screenTranslationTimer = setTimeout(() => applyScreenLanguage(currentLanguage), 140);
+  });
+  screenTranslationObserver.observe(document.body, { childList: true, subtree: true });
+}
+
 function getUiCopy(lang = currentLanguage) {
   return UI_TRANSLATIONS[lang] || UI_TRANSLATIONS.en;
 }
@@ -665,6 +957,8 @@ async function applySelectedLanguage(lang = currentLanguage) {
     el.textContent = await uiText(key, UI_TRANSLATIONS.en[key] || el.textContent);
   });
 
+  await applyScreenLanguage(currentLanguage);
+
   const filterLabels = copy.filters || {};
   for (const [filter, englishLabel] of Object.entries(UI_TRANSLATIONS.en.filters)) {
     const translatedLabel = filterLabels[filter] || await translateText(englishLabel, currentLanguage);
@@ -679,6 +973,7 @@ async function applySelectedLanguage(lang = currentLanguage) {
   if (sectionLabel && sectionLabel.closest("#trendingContainer")) {
     setElementTextKeepingIcon(sectionLabel, copy.trending || await translateText(UI_TRANSLATIONS.en.trending, currentLanguage));
   }
+
 }
 
 function showLanguageModalIfNeeded() {
@@ -1566,12 +1861,7 @@ function getReadableHost(url, fallback = "Source") {
 }
 
 function getFaviconUrl(url = "") {
-  try {
-    const host = new URL(url).hostname;
-    return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=32`;
-  } catch {
-    return "favicon-32x32.png";
-  }
+  return "favicon-32x32.png";
 }
 
 function mediaFallbackImage(title = "IndiaSearch", type = "Preview") {
@@ -1648,6 +1938,11 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
   const { replaceHistory = false, skipHistory = false } = options;
   let query = searchInput ? searchInput.value.trim() : "";
   stopSpeechPlayback();
+
+  if (currentFilter === "maps") {
+    renderMapsExperience(query);
+    return;
+  }
   
   if (!query && activeQuery) {
     query = activeQuery;
@@ -2700,8 +2995,9 @@ fetchWithApiFallback = async function(path, options = {}) {
   return originalFetchWithApiFallback(path, options);
 }
 
-document.addEventListener("DOMContentLoaded", async () => {
+async function initializeIndiaSearch() {
   const hasSavedLanguage = Boolean(localStorage.getItem(LANGUAGE_STORAGE_KEY));
+  initializeScreenTranslation();
   
   // If no saved language, auto-detected language is already in currentLanguage
   // Save it so future visits remember it
@@ -2734,7 +3030,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   } else {
     writeBrowserSearchState({ query: "" }, true);
   }
-});
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initializeIndiaSearch, { once: true });
+} else {
+  initializeIndiaSearch();
+}
 
 
 
