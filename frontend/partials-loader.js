@@ -15,7 +15,7 @@ async function loadHtmlPartials() {
 
 function loadMainApp() {
   const script = document.createElement('script');
-  script.src = 'app.js?v=screen-language-v3';
+  script.src = 'app.js?v=live-navigation-v1';
   document.body.appendChild(script);
 }
 

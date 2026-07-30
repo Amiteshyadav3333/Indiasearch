@@ -498,6 +498,19 @@ let indiaMap = null;
 let mapRouteLayer = null;
 let mapMarkersLayer = null;
 let activeRouteRequest = 0;
+let routeAlternativeLayers = [];
+let availableMapRoutes = [];
+let selectedMapRouteIndex = 0;
+let currentRouteStart = null;
+let currentRouteDestination = null;
+let currentRouteLabels = { from: "", to: "" };
+let liveLocationWatchId = null;
+let liveUserMarker = null;
+let liveAccuracyCircle = null;
+let lastLivePosition = null;
+let liveTravelledKm = 0;
+let liveRouteMetrics = null;
+let lastLiveRerouteAt = 0;
 
 function haversineKm(a, b) {
   const rad = value => value * Math.PI / 180;
@@ -515,6 +528,7 @@ function parseRouteQuery(query = "") {
 }
 
 async function renderMapsExperience(routeQuery = "") {
+  if (liveLocationWatchId !== null) stopLiveJourney();
   const parsedRoute = parseRouteQuery(routeQuery || searchInput?.value || "");
   if (heroSection) heroSection.classList.add("hidden");
   if (searchFiltersDiv) searchFiltersDiv.style.display = "flex";
@@ -549,8 +563,30 @@ async function renderMapsExperience(routeQuery = "") {
           <div id="indiaMap" class="india-map"></div>
           <div class="map-badge">INDIA ROAD MAP</div>
           <button class="map-reset-btn" type="button" onclick="resetMapView()" title="Show India">⌂</button>
+          <div class="live-map-hud" id="liveMapHud" hidden>
+            <span class="live-pulse"></span>
+            <div><small>LIVE SPEED</small><strong id="hudSpeed">0</strong><b>km/h</b></div>
+            <i></i>
+            <div><small>REMAINING</small><strong id="hudRemaining">—</strong><b>km</b></div>
+          </div>
         </div>
         <aside class="journey-panel">
+          <section class="live-journey-panel" id="liveJourneyPanel" hidden>
+            <div class="live-panel-head"><span><i></i> LIVE JOURNEY</span>
+              <button type="button" onclick="stopLiveJourney()">Stop</button>
+            </div>
+            <div class="speedometer">
+              <div class="speed-ring"><strong id="liveSpeed">0</strong><span>km/h</span></div>
+              <div><small>GPS accuracy</small><b id="liveAccuracy">—</b></div>
+            </div>
+            <div class="journey-progress-track"><span id="liveProgressBar"></span></div>
+            <div class="live-metrics">
+              <div><span>Covered</span><strong id="liveCovered">0 km</strong></div>
+              <div><span>Remaining</span><strong id="liveRemaining">—</strong></div>
+              <div><span>Live ETA</span><strong id="liveEta">—</strong></div>
+            </div>
+            <p class="live-road-status" id="liveRoadStatus">GPS signal ka wait ho raha hai…</p>
+          </section>
           <div id="journeySummary" class="journey-empty">
             <span class="journey-art">↝</span><h3>Aapka safar</h3>
             <p>Route search karne par distance, time aur road details yahan dikhenge.</p>
@@ -577,6 +613,10 @@ function initializeIndiaMap() {
     return;
   }
   if (indiaMap) indiaMap.remove();
+  routeAlternativeLayers = [];
+  availableMapRoutes = [];
+  liveUserMarker = null;
+  liveAccuracyCircle = null;
   indiaMap = L.map("indiaMap", { zoomControl: false, minZoom: 4, maxZoom: 19 }).setView([22.8, 79.2], 5);
   L.control.zoom({ position: "bottomright", zoomInTitle: "Zoom in", zoomOutTitle: "Zoom out" }).addTo(indiaMap);
   L.control.scale({ imperial: false, position: "bottomleft" }).addTo(indiaMap);
@@ -676,41 +716,276 @@ async function searchMapRoute(event) {
     await new Promise(resolve => setTimeout(resolve, 1050));
     const to = await geocodePlace(toText, toInput);
     if (requestId !== activeRouteRequest) return;
-    const url = `https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=full&geometries=geojson&steps=true`;
+    const url = `https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=full&geometries=geojson&steps=true&alternatives=true`;
     const response = await fetch(url);
     const data = await response.json();
-    const route = data.routes?.[0];
-    if (!response.ok || !route) throw new Error("Driving route abhi nahi mila");
+    if (!response.ok || !data.routes?.length) throw new Error("Driving route abhi nahi mila");
 
+    availableMapRoutes = data.routes.slice(0, 3);
+    currentRouteStart = from;
+    currentRouteDestination = to;
+    currentRouteLabels = { from: fromText, to: toText };
+    const shortestIndex = availableMapRoutes.reduce(
+      (best, route, index, routes) => route.distance < routes[best].distance ? index : best, 0
+    );
+    selectedMapRouteIndex = shortestIndex;
+    routeAlternativeLayers.forEach(layer => indiaMap.removeLayer(layer));
+    routeAlternativeLayers = [];
     if (mapRouteLayer) indiaMap.removeLayer(mapRouteLayer);
     mapMarkersLayer.clearLayers();
-    mapRouteLayer = L.geoJSON(route.geometry, {
-      style: { color: "#ff6b35", weight: 7, opacity: .92, lineCap: "round", lineJoin: "round" }
-    }).addTo(indiaMap);
+    availableMapRoutes.forEach((route, index) => {
+      const isShortest = index === shortestIndex;
+      const layer = L.geoJSON(route.geometry, {
+        style: {
+          color: isShortest ? "#ff6b35" : "#94a3b8",
+          weight: isShortest ? 7 : 5,
+          opacity: isShortest ? .94 : .55,
+          dashArray: isShortest ? null : "10 10",
+          lineCap: "round", lineJoin: "round"
+        }
+      }).addTo(indiaMap);
+      routeAlternativeLayers[index] = layer;
+    });
+    mapRouteLayer = routeAlternativeLayers[shortestIndex];
     L.marker([from.lat, from.lon], { icon: routeMarker("A", "start") }).addTo(mapMarkersLayer).bindPopup(`<strong>${escapeHtml(from.name)}</strong>`);
     L.marker([to.lat, to.lon], { icon: routeMarker("B", "end") }).addTo(mapMarkersLayer).bindPopup(`<strong>${escapeHtml(to.name)}</strong>`);
     indiaMap.fitBounds(mapRouteLayer.getBounds(), { paddingTopLeft: [45, 45], paddingBottomRight: [45, 45], maxZoom: 13 });
-
-    const distanceKm = route.distance / 1000;
-    const steps = route.legs?.[0]?.steps || [];
-    const roadNames = [...new Set(steps.map(step => step.name).filter(Boolean))].slice(0, 4);
-    document.getElementById("journeySummary").className = "journey-summary";
-    document.getElementById("journeySummary").innerHTML = `
-      <div class="journey-route"><span>A</span><i></i><span>B</span></div>
-      <p class="journey-label">FASTEST ROAD ROUTE</p>
-      <h3>${escapeHtml(fromText)} <span>→</span> ${escapeHtml(toText)}</h3>
-      <div class="journey-stats">
-        <div><strong>${distanceKm.toFixed(distanceKm < 100 ? 1 : 0)} km</strong><span>Road distance</span></div>
-        <div><strong>${formatDriveTime(route.duration)}</strong><span>Estimated drive</span></div>
-      </div>
-      ${roadNames.length ? `<div class="road-list"><span>मुख्य roads</span>${roadNames.map(name => `<b>${escapeHtml(name)}</b>`).join("")}</div>` : ""}
-      <a class="open-navigation" target="_blank" rel="noopener" href="https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=${from.lat}%2C${from.lon}%3B${to.lat}%2C${to.lon}">Open navigation ↗</a>`;
-    setRouteStatus(`${distanceKm.toFixed(0)} km ka road route mil gaya.`, "success");
+    renderSelectedMapRoute(fromText, toText, from, to);
+    const shortestKm = availableMapRoutes[shortestIndex].distance / 1000;
+    setRouteStatus(`${shortestKm.toFixed(0)} km ka shortest road route mil gaya.`, "success");
     if (searchInput) searchInput.value = `${fromText} to ${toText} distance`;
   } catch (error) {
     setRouteStatus(error.message || "Route nahi mil paaya. City names check karein.", "error");
   } finally {
     document.querySelector(".find-route-btn")?.classList.remove("loading");
+  }
+}
+
+function renderSelectedMapRoute(fromText, toText, from, to) {
+  const route = availableMapRoutes[selectedMapRouteIndex];
+  if (!route) return;
+  const distanceKm = route.distance / 1000;
+  const steps = route.legs?.[0]?.steps || [];
+  const roadNames = [...new Set(steps.map(step => step.name).filter(Boolean))].slice(0, 4);
+  const shortestDistance = Math.min(...availableMapRoutes.map(item => item.distance));
+  liveRouteMetrics = buildLiveRouteMetrics(route);
+
+  document.getElementById("journeySummary").className = "journey-summary";
+  document.getElementById("journeySummary").innerHTML = `
+    <div class="journey-route"><span>A</span><i></i><span>B</span></div>
+    <p class="journey-label">${route.distance === shortestDistance ? "✓ SHORTEST PATH" : "ALTERNATIVE PATH"}</p>
+    <h3>${escapeHtml(fromText)} <span>→</span> ${escapeHtml(toText)}</h3>
+    <div class="journey-stats">
+      <div><strong>${distanceKm.toFixed(distanceKm < 100 ? 1 : 0)} km</strong><span>Road distance</span></div>
+      <div><strong>${formatDriveTime(route.duration)}</strong><span>Estimated drive</span></div>
+    </div>
+    ${availableMapRoutes.length > 1 ? `
+      <div class="route-options">
+        <div class="route-options-title"><span>Choose your path</span><small>Shortest highlighted</small></div>
+        ${availableMapRoutes.map((item, index) => `
+          <button type="button" class="route-option ${index === selectedMapRouteIndex ? "active" : ""}"
+            onclick="selectRouteAlternative(${index})">
+            <span>${index === availableMapRoutes.findIndex(candidate => candidate.distance === shortestDistance) ? "Shortest" : `Option ${index + 1}`}</span>
+            <strong>${(item.distance / 1000).toFixed(0)} km</strong><small>${formatDriveTime(item.duration)}</small>
+          </button>`).join("")}
+      </div>` : ""}
+    <button class="start-live-journey" type="button" onclick="startLiveJourney()">
+      <span class="live-pulse"></span><span><strong>Start live journey</strong><small>Movement, speed & remaining distance</small></span><b>→</b>
+    </button>
+    ${roadNames.length ? `<div class="road-list"><span>मुख्य roads</span>${roadNames.map(name => `<b>${escapeHtml(name)}</b>`).join("")}</div>` : ""}
+    <a class="open-navigation" target="_blank" rel="noopener" href="https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=${from.lat}%2C${from.lon}%3B${to.lat}%2C${to.lon}">Open navigation ↗</a>`;
+}
+
+function selectRouteAlternative(index) {
+  if (!availableMapRoutes[index] || !indiaMap) return;
+  selectedMapRouteIndex = index;
+  routeAlternativeLayers.forEach((layer, layerIndex) => {
+    layer.setStyle({
+      color: layerIndex === index ? "#ff6b35" : "#94a3b8",
+      weight: layerIndex === index ? 7 : 5,
+      opacity: layerIndex === index ? .94 : .5,
+      dashArray: layerIndex === index ? null : "10 10"
+    });
+    if (layerIndex === index) layer.bringToFront();
+  });
+  mapRouteLayer = routeAlternativeLayers[index];
+  indiaMap.fitBounds(mapRouteLayer.getBounds(), { padding: [45, 45], maxZoom: 13 });
+  renderSelectedMapRoute(
+    currentRouteLabels.from, currentRouteLabels.to, currentRouteStart, currentRouteDestination
+  );
+}
+
+function buildLiveRouteMetrics(route) {
+  const coordinates = route?.geometry?.coordinates || [];
+  const cumulative = [0];
+  for (let index = 1; index < coordinates.length; index += 1) {
+    const previous = { lat: coordinates[index - 1][1], lon: coordinates[index - 1][0] };
+    const current = { lat: coordinates[index][1], lon: coordinates[index][0] };
+    cumulative[index] = cumulative[index - 1] + haversineKm(previous, current);
+  }
+  return { coordinates, cumulative, geometryKm: cumulative[cumulative.length - 1] || 0 };
+}
+
+function getLiveRouteProgress(lat, lon) {
+  if (!liveRouteMetrics?.coordinates?.length) return { progress: 0, deviationKm: Infinity };
+  const coordinates = liveRouteMetrics.coordinates;
+  const stride = Math.max(1, Math.floor(coordinates.length / 1600));
+  let nearestIndex = 0;
+  let nearestDistance = Infinity;
+  for (let index = 0; index < coordinates.length; index += stride) {
+    const distance = haversineKm({ lat, lon }, { lat: coordinates[index][1], lon: coordinates[index][0] });
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      nearestIndex = index;
+    }
+  }
+  const coveredGeometry = liveRouteMetrics.cumulative[nearestIndex] || 0;
+  return {
+    progress: liveRouteMetrics.geometryKm ? Math.min(1, coveredGeometry / liveRouteMetrics.geometryKm) : 0,
+    deviationKm: nearestDistance
+  };
+}
+
+function liveUserIcon(heading = 0) {
+  return L.divIcon({
+    className: "live-user-marker",
+    html: `<span style="transform:rotate(${Number.isFinite(heading) ? heading : 0}deg)">▲</span><i></i>`,
+    iconSize: [44, 44], iconAnchor: [22, 22]
+  });
+}
+
+function startLiveJourney() {
+  if (!currentRouteDestination) return setRouteStatus("Pehle destination ka route search karein.", "error");
+  if (!navigator.geolocation) return setRouteStatus("Browser live location support nahi karta.", "error");
+  if (liveLocationWatchId !== null) return;
+
+  const panel = document.getElementById("liveJourneyPanel");
+  const hud = document.getElementById("liveMapHud");
+  if (panel) panel.hidden = false;
+  if (hud) hud.hidden = false;
+  liveTravelledKm = 0;
+  lastLivePosition = null;
+  setRouteStatus("Live journey start ho rahi hai…", "loading");
+
+  liveLocationWatchId = navigator.geolocation.watchPosition(
+    updateLiveJourneyPosition,
+    error => {
+      setRouteStatus(error.code === 1 ? "Live location permission allow karein." : "GPS signal nahi mil raha.", "error");
+      const status = document.getElementById("liveRoadStatus");
+      if (status) status.textContent = "Location unavailable. Open sky ke neeche try karein.";
+    },
+    { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 }
+  );
+}
+
+function stopLiveJourney() {
+  if (liveLocationWatchId !== null && navigator.geolocation) {
+    navigator.geolocation.clearWatch(liveLocationWatchId);
+  }
+  liveLocationWatchId = null;
+  lastLivePosition = null;
+  const panel = document.getElementById("liveJourneyPanel");
+  const hud = document.getElementById("liveMapHud");
+  if (panel) panel.hidden = true;
+  if (hud) hud.hidden = true;
+  setRouteStatus("Live journey stop ho gayi.", "success");
+}
+
+async function updateLiveJourneyPosition(position) {
+  if (!indiaMap || !currentRouteDestination) return;
+  const { latitude: lat, longitude: lon, speed, accuracy, heading } = position.coords;
+  const now = position.timestamp || Date.now();
+  let calculatedSpeed = Number.isFinite(speed) && speed >= 0 ? speed * 3.6 : 0;
+
+  if (lastLivePosition) {
+    const segmentKm = haversineKm(lastLivePosition, { lat, lon });
+    const seconds = Math.max(1, (now - lastLivePosition.time) / 1000);
+    if (segmentKm < 2) {
+      liveTravelledKm += segmentKm;
+      if (!calculatedSpeed) calculatedSpeed = Math.min(180, segmentKm / (seconds / 3600));
+    }
+  }
+  lastLivePosition = { lat, lon, time: now };
+  appState.location = { lat, lon };
+
+  if (!liveUserMarker) {
+    liveUserMarker = L.marker([lat, lon], { icon: liveUserIcon(heading), zIndexOffset: 1000 }).addTo(indiaMap);
+    liveAccuracyCircle = L.circle([lat, lon], {
+      radius: accuracy || 20, color: "#2563eb", weight: 1, fillColor: "#60a5fa", fillOpacity: .12
+    }).addTo(indiaMap);
+    document.getElementById("nearbySection").hidden = false;
+    loadNearbyPlaces(lat, lon);
+  } else {
+    liveUserMarker.setLatLng([lat, lon]).setIcon(liveUserIcon(heading));
+    liveAccuracyCircle?.setLatLng([lat, lon]).setRadius(accuracy || 20);
+  }
+
+  const progressData = getLiveRouteProgress(lat, lon);
+  const route = availableMapRoutes[selectedMapRouteIndex];
+  const remainingKm = Math.max(0, (route.distance / 1000) * (1 - progressData.progress));
+  const etaSeconds = route.duration * (1 - progressData.progress);
+  const progressPercent = Math.round(progressData.progress * 100);
+
+  document.getElementById("liveSpeed").textContent = Math.round(calculatedSpeed);
+  document.getElementById("hudSpeed").textContent = Math.round(calculatedSpeed);
+  document.getElementById("liveAccuracy").textContent = `±${Math.round(accuracy || 0)} m`;
+  document.getElementById("liveCovered").textContent = `${liveTravelledKm.toFixed(1)} km`;
+  document.getElementById("liveRemaining").textContent = `${remainingKm.toFixed(1)} km`;
+  document.getElementById("hudRemaining").textContent = remainingKm.toFixed(1);
+  document.getElementById("liveEta").textContent = formatDriveTime(etaSeconds);
+  document.getElementById("liveProgressBar").style.width = `${progressPercent}%`;
+  document.getElementById("liveRoadStatus").textContent =
+    progressData.deviationKm > .2 ? "Route se bahar hain—naya shortest path ban raha hai…" : `${progressPercent}% journey route cover hua`;
+
+  if (indiaMap.getZoom() < 15 || progressData.deviationKm > .2) {
+    indiaMap.flyTo([lat, lon], 16, { duration: .8 });
+  } else {
+    indiaMap.panTo([lat, lon], { animate: true, duration: .7 });
+  }
+
+  if (progressData.deviationKm > .2 && Date.now() - lastLiveRerouteAt > 20000) {
+    lastLiveRerouteAt = Date.now();
+    await refreshRouteFromLivePosition(lat, lon);
+  }
+
+  if (haversineKm({ lat, lon }, currentRouteDestination) < .06) {
+    document.getElementById("liveRoadStatus").textContent = "Aap destination par pahunch gaye! 🎉";
+    stopLiveJourney();
+  } else {
+    setRouteStatus(`Live • ${remainingKm.toFixed(1)} km remaining • ${Math.round(calculatedSpeed)} km/h`, "success");
+  }
+}
+
+async function refreshRouteFromLivePosition(lat, lon) {
+  try {
+    const to = currentRouteDestination;
+    const response = await fetch(
+      `https://router.project-osrm.org/route/v1/driving/${lon},${lat};${to.lon},${to.lat}?overview=full&geometries=geojson&steps=true&alternatives=true`
+    );
+    const data = await response.json();
+    if (!data.routes?.length) return;
+    availableMapRoutes = data.routes.slice(0, 3);
+    selectedMapRouteIndex = availableMapRoutes.reduce(
+      (best, route, index, routes) => route.distance < routes[best].distance ? index : best, 0
+    );
+    currentRouteStart = { lat, lon, name: "Live location" };
+    currentRouteLabels.from = "Live location";
+    routeAlternativeLayers.forEach(layer => indiaMap.removeLayer(layer));
+    routeAlternativeLayers = availableMapRoutes.map((route, index) => L.geoJSON(route.geometry, {
+      style: {
+        color: index === selectedMapRouteIndex ? "#ff6b35" : "#94a3b8",
+        weight: index === selectedMapRouteIndex ? 7 : 5,
+        opacity: index === selectedMapRouteIndex ? .94 : .5,
+        dashArray: index === selectedMapRouteIndex ? null : "10 10"
+      }
+    }).addTo(indiaMap));
+    mapRouteLayer = routeAlternativeLayers[selectedMapRouteIndex];
+    liveRouteMetrics = buildLiveRouteMetrics(availableMapRoutes[selectedMapRouteIndex]);
+    renderSelectedMapRoute(currentRouteLabels.from, currentRouteLabels.to, currentRouteStart, currentRouteDestination);
+    document.getElementById("liveJourneyPanel").hidden = false;
+    document.getElementById("liveMapHud").hidden = false;
+  } catch {
+    // Keep the last known route if live rerouting is temporarily unavailable.
   }
 }
 
