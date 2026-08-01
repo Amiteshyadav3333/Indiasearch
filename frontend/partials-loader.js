@@ -15,7 +15,7 @@ async function loadHtmlPartials() {
 
 function loadMainApp() {
   const script = document.createElement('script');
-  script.src = 'app.js?v=english-i18n-v1';
+  script.src = 'app.js?v=fullscreen-map-v1';
   document.body.appendChild(script);
 }
 

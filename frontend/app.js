@@ -578,6 +578,8 @@ async function renderMapsExperience(routeQuery = "") {
           <div id="indiaMap" class="india-map"></div>
           <div class="map-badge">INDIA ROAD MAP</div>
           <button class="map-reset-btn" type="button" onclick="resetMapView()" title="Show India">⌂</button>
+          <button class="map-expand-btn" type="button" onclick="toggleMapFullscreen(true)" title="Open full-screen map" aria-label="Open full-screen map">⛶</button>
+          <button class="map-fullscreen-close" type="button" onclick="toggleMapFullscreen(false)" aria-label="Close full-screen map">×</button>
           <div class="live-map-hud" id="liveMapHud" hidden>
             <span class="live-pulse"></span>
             <div><small>LIVE SPEED</small><strong id="hudSpeed">0</strong><b>km/h</b></div>
@@ -639,8 +641,45 @@ function initializeIndiaMap() {
     maxZoom: 19, attribution: "&copy; OpenStreetMap contributors"
   }).addTo(indiaMap);
   mapMarkersLayer = L.layerGroup().addTo(indiaMap);
+  mapNode.addEventListener("click", event => {
+    const stage = mapNode.closest(".map-stage");
+    if (document.fullscreenElement || stage?.matches(":fullscreen") || stage?.classList.contains("map-fullscreen")) return;
+    if (event.target.closest(".leaflet-control, .leaflet-marker-icon, .leaflet-popup, button, a")) return;
+    toggleMapFullscreen(true);
+  });
   setTimeout(() => indiaMap?.invalidateSize(), 80);
 }
+
+async function toggleMapFullscreen(force) {
+  const stage = document.querySelector(".map-stage");
+  if (!stage) return;
+  const isOpen = document.fullscreenElement === stage || stage.matches(":fullscreen") || stage.classList.contains("map-fullscreen");
+  const shouldOpen = typeof force === "boolean" ? force : !isOpen;
+
+  if (shouldOpen && !isOpen) {
+    try {
+      if (stage.requestFullscreen) await stage.requestFullscreen();
+      else throw new Error("Fullscreen API unavailable");
+    } catch (_) {
+      stage.classList.add("map-fullscreen");
+      document.body.classList.add("map-fullscreen-open");
+    }
+  } else if (!shouldOpen && isOpen) {
+    if (document.fullscreenElement && document.exitFullscreen) await document.exitFullscreen();
+    stage.classList.remove("map-fullscreen");
+    document.body.classList.remove("map-fullscreen-open");
+  }
+  setTimeout(() => indiaMap?.invalidateSize(), 120);
+}
+
+document.addEventListener("fullscreenchange", () => {
+  const stage = document.querySelector(".map-stage");
+  if (!stage) return;
+  const isOpen = document.fullscreenElement === stage || stage.matches(":fullscreen");
+  stage.classList.toggle("map-fullscreen-native", isOpen);
+  document.body.classList.toggle("map-fullscreen-open", isOpen || stage.classList.contains("map-fullscreen"));
+  setTimeout(() => indiaMap?.invalidateSize(), 120);
+});
 
 function resetMapView() {
   if (indiaMap) indiaMap.flyTo([22.8, 79.2], 5, { duration: 1.1 });
