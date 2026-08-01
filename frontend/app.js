@@ -101,7 +101,7 @@ function enterNutritionScan() {
 }
 
 function exitAiMode() {
-    if (aiSearchInput) aiSearchInput.placeholder = "Puchho jo aapke mann mein hai... (AI Mode)";
+    if (aiSearchInput) aiSearchInput.placeholder = "Ask anything on your mind... (AI Mode)";
     if (searchBoxStandard) searchBoxStandard.style.display = "flex";
     if (searchBoxAi) {
         searchBoxAi.style.display = "none";
@@ -522,9 +522,24 @@ function haversineKm(a, b) {
 }
 
 function parseRouteQuery(query = "") {
-  const cleaned = query.replace(/\b(distance|road|route|kitna|door|km)\b/gi, " ").replace(/\s+/g, " ").trim();
-  const match = cleaned.match(/^(.+?)\s+(?:to|se)\s+(.+)$/i);
-  return match ? { from: match[1].trim(), to: match[2].trim() } : { from: "", to: "" };
+  const cleaned = String(query)
+    .replace(/\b(distance|road|route|kitna|door|duri|doori|kilomet(?:er|re)s?|kms?)\b/gi, " ")
+    .replace(/(दूरी|कितना|कितनी|किलोमीटर|किमी|रास्ता|मार्ग)/g, " ")
+    .replace(/\s+/g, " ").trim();
+  const match = cleaned.match(/^(.+?)\s+(?:to|se|से)\s+(.+?)(?:\s+(?:tak|तक))?$/i);
+  if (!match) return { from: "", to: "" };
+  const from = match[1].replace(/^(?:from|start|starting)\s+/i, "").trim();
+  const to = match[2].replace(/\s+(?:tak|तक)$/i, "").trim();
+  return from && to ? { from, to } : { from: "", to: "" };
+}
+
+function isDirectDistanceQuery(query = "") {
+  const route = parseRouteQuery(query);
+  if (!route.from || !route.to) return false;
+  const text = String(query).toLowerCase();
+  const distanceSignal = /(distance|duri|doori|road|route|km|kilometer|kilometre|दूरी|किमी|किलोमीटर|रास्ता|मार्ग)/i.test(text);
+  const naturalRouteSignal = /\s(?:se|से)\s/i.test(text) && !/\b(how|kaise|कैसे)\b/i.test(text);
+  return distanceSignal || naturalRouteSignal;
 }
 
 async function renderMapsExperience(routeQuery = "") {
@@ -540,23 +555,23 @@ async function renderMapsExperience(routeQuery = "") {
     <section class="maps-experience" aria-label="IndiaSearch road map">
       <div class="map-head">
         <div><span class="eyebrow">Leaflet • OpenStreetMap • Live routes</span>
-          <h2>Safar ka sahi raasta</h2>
-          <p>Do shehar likhiye—road route, distance aur driving time turant dekhiye.</p>
+          <h2>Find the best way there</h2>
+          <p>Enter two places to see the road route, distance, and estimated driving time.</p>
         </div>
-        <button class="locate-me-btn" type="button" onclick="useLiveLocation()">⌖ Meri location</button>
+        <button class="locate-me-btn" type="button" onclick="useLiveLocation()">⌖ Use my location</button>
       </div>
       <form class="route-planner" id="routePlanner" onsubmit="searchMapRoute(event)">
-        <label class="route-field"><span class="route-dot start"></span><span class="route-field-copy">Kahan se</span>
+        <label class="route-field"><span class="route-dot start"></span><span class="route-field-copy">From</span>
           <input id="routeFrom" value="${escapeHtml(parsedRoute.from)}" placeholder="Azamgarh" autocomplete="off" required>
         </label>
         <button class="swap-route-btn" type="button" onclick="swapRouteFields()" aria-label="Swap locations">⇅</button>
-        <label class="route-field"><span class="route-dot end"></span><span class="route-field-copy">Kahan tak</span>
+        <label class="route-field"><span class="route-dot end"></span><span class="route-field-copy">To</span>
           <input id="routeTo" value="${escapeHtml(parsedRoute.to)}" placeholder="Delhi" autocomplete="off" required>
         </label>
-        <button class="find-route-btn" type="submit"><span>Raasta dikhao</span><b>→</b></button>
+        <button class="find-route-btn" type="submit"><span>Show route</span><b>→</b></button>
       </form>
       <div class="route-status" id="routeStatus" aria-live="polite">
-        <span class="status-icon">⌁</span><span>Example: <button type="button" onclick="setRouteExample('Azamgarh','Delhi')">Azamgarh se Delhi</button></span>
+        <span class="status-icon">⌁</span><span>Example: <button type="button" onclick="setRouteExample('Azamgarh','Delhi')">Azamgarh to Delhi</button></span>
       </div>
       <div class="map-layout">
         <div class="map-stage">
@@ -585,11 +600,11 @@ async function renderMapsExperience(routeQuery = "") {
               <div><span>Remaining</span><strong id="liveRemaining">—</strong></div>
               <div><span>Live ETA</span><strong id="liveEta">—</strong></div>
             </div>
-            <p class="live-road-status" id="liveRoadStatus">GPS signal ka wait ho raha hai…</p>
+            <p class="live-road-status" id="liveRoadStatus">Waiting for a GPS signal…</p>
           </section>
           <div id="journeySummary" class="journey-empty">
-            <span class="journey-art">↝</span><h3>Aapka safar</h3>
-            <p>Route search karne par distance, time aur road details yahan dikhenge.</p>
+            <span class="journey-art">↝</span><h3>Your journey</h3>
+            <p>Search for a route to see the distance, travel time, and road details here.</p>
           </div>
           <div class="nearby-section" id="nearbySection" hidden>
             <div class="aside-heading"><h3>Nearby famous places</h3><span>8 km</span></div>
@@ -597,7 +612,7 @@ async function renderMapsExperience(routeQuery = "") {
           </div>
         </aside>
       </div>
-      <p class="map-attribution-note">Map © OpenStreetMap contributors • Route © OSRM • Distance driving route ke hisaab se.</p>
+      <p class="map-attribution-note">Map © OpenStreetMap contributors • Routes © OSRM • Distances follow the driving route.</p>
     </section>`;
 
   initializeIndiaMap();
@@ -608,8 +623,8 @@ function initializeIndiaMap() {
   const mapNode = document.getElementById("indiaMap");
   if (!mapNode) return;
   if (typeof L === "undefined") {
-    mapNode.innerHTML = `<div class="map-permission"><span>🗺️</span><strong>Map load nahi hua</strong><p>Internet check karke page refresh karein.</p></div>`;
-    setRouteStatus("Map library load nahi ho paayi.", "error");
+    mapNode.innerHTML = `<div class="map-permission"><span>🗺️</span><strong>The map could not load</strong><p>Check your internet connection and refresh the page.</p></div>`;
+    setRouteStatus("The map library could not be loaded.", "error");
     return;
   }
   if (indiaMap) indiaMap.remove();
@@ -651,36 +666,36 @@ function swapRouteFields() {
 }
 
 function useLiveLocation() {
-  if (!navigator.geolocation) return setRouteStatus("Browser live location support nahi karta.", "error");
-  setRouteStatus("Aapki live location mil rahi hai…", "loading");
+  if (!navigator.geolocation) return setRouteStatus("This browser does not support live location.", "error");
+  setRouteStatus("Getting your live location…", "loading");
   navigator.geolocation.getCurrentPosition(async position => {
     const { latitude: lat, longitude: lon } = position.coords;
     appState.location = { lat, lon };
     localStorage.setItem("userLocation", JSON.stringify(appState.location));
-    document.getElementById("routeFrom").value = "Meri live location";
+    document.getElementById("routeFrom").value = "My live location";
     document.getElementById("routeFrom").dataset.lat = String(lat);
     document.getElementById("routeFrom").dataset.lon = String(lon);
     mapMarkersLayer?.clearLayers();
     L.circleMarker([lat, lon], { radius: 9, color: "#fff", weight: 3, fillColor: "#2563eb", fillOpacity: 1 })
-      .addTo(mapMarkersLayer).bindPopup("Aap yahan hain").openPopup();
+      .addTo(mapMarkersLayer).bindPopup("You are here").openPopup();
     indiaMap.flyTo([lat, lon], 14, { duration: 1.2 });
-    setRouteStatus("Live location tayyar hai. Destination likhiye.", "success");
+    setRouteStatus("Your live location is ready. Enter a destination.", "success");
     document.getElementById("nearbySection").hidden = false;
     await loadNearbyPlaces(lat, lon);
-  }, () => setRouteStatus("Location permission allow karke dobara try karein.", "error"),
+  }, () => setRouteStatus("Allow location access and try again.", "error"),
   { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
 }
 
 async function geocodePlace(name, input) {
-  if (input?.dataset.lat && input?.dataset.lon && name === "Meri live location") {
+  if (input?.dataset.lat && input?.dataset.lon && name === "My live location") {
     return { lat: Number(input.dataset.lat), lon: Number(input.dataset.lon), name };
   }
   const query = /india/i.test(name) ? name : `${name}, India`;
   const response = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=in&limit=1&q=${encodeURIComponent(query)}`,
     { headers: { "Accept-Language": currentLanguage || "en" } });
-  if (!response.ok) throw new Error(`${name} nahi mila`);
+  if (!response.ok) throw new Error(`${name} could not be found`);
   const place = (await response.json())[0];
-  if (!place) throw new Error(`${name} nahi mila`);
+  if (!place) throw new Error(`${name} could not be found`);
   return { lat: Number(place.lat), lon: Number(place.lon), name: place.display_name.split(",").slice(0, 2).join(",") };
 }
 
@@ -706,10 +721,10 @@ async function searchMapRoute(event) {
   const toInput = document.getElementById("routeTo");
   const fromText = fromInput?.value.trim();
   const toText = toInput?.value.trim();
-  if (!fromText || !toText) return setRouteStatus("Dono jagah ka naam likhiye.", "error");
+  if (!fromText || !toText) return setRouteStatus("Enter both the starting point and destination.", "error");
 
   const requestId = ++activeRouteRequest;
-  setRouteStatus(`${fromText} se ${toText} ka road route dhoondh rahe hain…`, "loading");
+  setRouteStatus(`Finding a road route from ${fromText} to ${toText}…`, "loading");
   document.querySelector(".find-route-btn")?.classList.add("loading");
   try {
     const from = await geocodePlace(fromText, fromInput);
@@ -719,7 +734,7 @@ async function searchMapRoute(event) {
     const url = `https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=full&geometries=geojson&steps=true&alternatives=true`;
     const response = await fetch(url);
     const data = await response.json();
-    if (!response.ok || !data.routes?.length) throw new Error("Driving route abhi nahi mila");
+    if (!response.ok || !data.routes?.length) throw new Error("A driving route is not available right now");
 
     availableMapRoutes = data.routes.slice(0, 3);
     currentRouteStart = from;
@@ -752,10 +767,10 @@ async function searchMapRoute(event) {
     indiaMap.fitBounds(mapRouteLayer.getBounds(), { paddingTopLeft: [45, 45], paddingBottomRight: [45, 45], maxZoom: 13 });
     renderSelectedMapRoute(fromText, toText, from, to);
     const shortestKm = availableMapRoutes[shortestIndex].distance / 1000;
-    setRouteStatus(`${shortestKm.toFixed(0)} km ka shortest road route mil gaya.`, "success");
+    setRouteStatus(`Found the shortest road route: ${shortestKm.toFixed(0)} km.`, "success");
     if (searchInput) searchInput.value = `${fromText} to ${toText} distance`;
   } catch (error) {
-    setRouteStatus(error.message || "Route nahi mil paaya. City names check karein.", "error");
+    setRouteStatus(error.message || "The route could not be found. Check the place names.", "error");
   } finally {
     document.querySelector(".find-route-btn")?.classList.remove("loading");
   }
@@ -792,7 +807,7 @@ function renderSelectedMapRoute(fromText, toText, from, to) {
     <button class="start-live-journey" type="button" onclick="startLiveJourney()">
       <span class="live-pulse"></span><span><strong>Start live journey</strong><small>Movement, speed & remaining distance</small></span><b>→</b>
     </button>
-    ${roadNames.length ? `<div class="road-list"><span>मुख्य roads</span>${roadNames.map(name => `<b>${escapeHtml(name)}</b>`).join("")}</div>` : ""}
+    ${roadNames.length ? `<div class="road-list"><span>Main roads</span>${roadNames.map(name => `<b>${escapeHtml(name)}</b>`).join("")}</div>` : ""}
     <a class="open-navigation" target="_blank" rel="noopener" href="https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=${from.lat}%2C${from.lon}%3B${to.lat}%2C${to.lon}">Open navigation ↗</a>`;
 }
 
@@ -855,8 +870,8 @@ function liveUserIcon(heading = 0) {
 }
 
 function startLiveJourney() {
-  if (!currentRouteDestination) return setRouteStatus("Pehle destination ka route search karein.", "error");
-  if (!navigator.geolocation) return setRouteStatus("Browser live location support nahi karta.", "error");
+  if (!currentRouteDestination) return setRouteStatus("Search for a destination route first.", "error");
+  if (!navigator.geolocation) return setRouteStatus("This browser does not support live location.", "error");
   if (liveLocationWatchId !== null) return;
 
   const panel = document.getElementById("liveJourneyPanel");
@@ -865,14 +880,14 @@ function startLiveJourney() {
   if (hud) hud.hidden = false;
   liveTravelledKm = 0;
   lastLivePosition = null;
-  setRouteStatus("Live journey start ho rahi hai…", "loading");
+  setRouteStatus("Starting live journey…", "loading");
 
   liveLocationWatchId = navigator.geolocation.watchPosition(
     updateLiveJourneyPosition,
     error => {
-      setRouteStatus(error.code === 1 ? "Live location permission allow karein." : "GPS signal nahi mil raha.", "error");
+      setRouteStatus(error.code === 1 ? "Allow live location access." : "A GPS signal is not available.", "error");
       const status = document.getElementById("liveRoadStatus");
-      if (status) status.textContent = "Location unavailable. Open sky ke neeche try karein.";
+      if (status) status.textContent = "Location is unavailable. Try again in an open area.";
     },
     { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 }
   );
@@ -888,7 +903,7 @@ function stopLiveJourney() {
   const hud = document.getElementById("liveMapHud");
   if (panel) panel.hidden = true;
   if (hud) hud.hidden = true;
-  setRouteStatus("Live journey stop ho gayi.", "success");
+  setRouteStatus("Live journey stopped.", "success");
 }
 
 async function updateLiveJourneyPosition(position) {
@@ -935,7 +950,7 @@ async function updateLiveJourneyPosition(position) {
   document.getElementById("liveEta").textContent = formatDriveTime(etaSeconds);
   document.getElementById("liveProgressBar").style.width = `${progressPercent}%`;
   document.getElementById("liveRoadStatus").textContent =
-    progressData.deviationKm > .2 ? "Route se bahar hain—naya shortest path ban raha hai…" : `${progressPercent}% journey route cover hua`;
+    progressData.deviationKm > .2 ? "You are off route—calculating a new shortest path…" : `${progressPercent}% of the route completed`;
 
   if (indiaMap.getZoom() < 15 || progressData.deviationKm > .2) {
     indiaMap.flyTo([lat, lon], 16, { duration: .8 });
@@ -949,7 +964,7 @@ async function updateLiveJourneyPosition(position) {
   }
 
   if (haversineKm({ lat, lon }, currentRouteDestination) < .06) {
-    document.getElementById("liveRoadStatus").textContent = "Aap destination par pahunch gaye! 🎉";
+    document.getElementById("liveRoadStatus").textContent = "You have arrived at your destination! 🎉";
     stopLiveJourney();
   } else {
     setRouteStatus(`Live • ${remainingKm.toFixed(1)} km remaining • ${Math.round(calculatedSpeed)} km/h`, "success");
@@ -1007,13 +1022,13 @@ async function loadNearbyPlaces(lat, lon) {
     list.innerHTML = places.length ? places.map((place, index) => `
       <button class="nearby-place" data-lat="${place.lat}" data-lon="${place.lon}">
         <span class="place-number">${index + 1}</span><span><strong>${escapeHtml(place.name)}</strong>
-        <small>${escapeHtml(place.type)} • ${place.airKm.toFixed(1)} km seedhi doori</small></span><span class="route-arrow">→</span>
-      </button>`).join("") : `<p class="muted">8 km ke andar famous place nahi mila.</p>`;
+        <small>${escapeHtml(place.type)} • ${place.airKm.toFixed(1)} km straight-line distance</small></span><span class="route-arrow">→</span>
+      </button>`).join("") : `<p class="muted">No famous places were found within 8 km.</p>`;
     list.querySelectorAll(".nearby-place").forEach((button, index) => {
       button.addEventListener("click", () => showRoadDistance(places[index], button));
     });
   } catch {
-    list.innerHTML = `<p class="muted">Nearby places abhi load nahi ho paaye. Map aur roads phir bhi use kar sakte hain.</p>`;
+    list.innerHTML = `<p class="muted">Nearby places could not be loaded right now. You can still use the map and road routes.</p>`;
   }
 }
 
@@ -1378,7 +1393,7 @@ function updateMicUI() {
 function resetPlaceholders() {
   const copy = getUiCopy();
   const stdPlaceholder = copy.placeholder || "Search anything...";
-  const aiPlaceholder = copy.aiPlaceholder || "Puchho jo aapke mann mein hai... (AI Mode)";
+  const aiPlaceholder = copy.aiPlaceholder || "Ask anything on your mind... (AI Mode)";
   
   if (searchInput) {
     searchInput.placeholder = stdPlaceholder;
@@ -1799,7 +1814,7 @@ async function captureLiveNutritionFrame() {
 
     const data = await analyzeNutritionByImage(b64, "image/jpeg");
     if (!data.name && !data.food_name) {
-      throw new Error(data.detail || data.error || "Food nutrition result nahi mila");
+      throw new Error(data.detail || data.error || "Nutrition information could not be found");
     }
 
     stopLiveScan();
@@ -2046,7 +2061,7 @@ if (pdfInput) {
             aiSearchInput.placeholder = "PDF Analysis active. Ask anything...";
             aiSearchInput.focus();
         }
-        searchInput.placeholder = "Puchho iss PDF ke baare mein...";
+        searchInput.placeholder = "Ask anything about this PDF...";
         searchInput.focus();
       } else {
         throw new Error(data.error || "Upload failed");
@@ -2214,11 +2229,6 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
   let query = searchInput ? searchInput.value.trim() : "";
   stopSpeechPlayback();
 
-  if (currentFilter === "maps") {
-    renderMapsExperience(query);
-    return;
-  }
-  
   if (!query && activeQuery) {
     query = activeQuery;
     if (searchInput) searchInput.value = query;
@@ -2226,6 +2236,20 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
 
   if (!query) {
     resetToHome({ replaceHistory, skipHistory });
+    return;
+  }
+
+  if (!aiMode && (currentFilter === "maps" || isDirectDistanceQuery(query))) {
+    currentFilter = "maps";
+    activeQuery = query;
+    updateClearBtn();
+    closeAutocomplete();
+    applyFilterActiveState("maps");
+    if (pageNumber === 1) saveHistory(query);
+    if (!skipHistory) {
+      writeBrowserSearchState({ query, page: 1, filter: "maps", aiMode: false }, replaceHistory);
+    }
+    renderMapsExperience(query);
     return;
   }
 

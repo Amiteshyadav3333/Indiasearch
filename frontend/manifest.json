@@ -1,7 +1,7 @@
 {
   "name": "IndiaSearch",
   "short_name": "IndiaSearch",
-  "description": "India ka apna AI-powered search engine",
+  "description": "India's AI-powered multilingual search engine",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

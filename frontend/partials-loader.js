@@ -15,7 +15,7 @@ async function loadHtmlPartials() {
 
 function loadMainApp() {
   const script = document.createElement('script');
-  script.src = 'app.js?v=live-navigation-v1';
+  script.src = 'app.js?v=english-i18n-v1';
   document.body.appendChild(script);
 }
 
@@ -23,5 +23,5 @@ loadHtmlPartials()
   .then(loadMainApp)
   .catch((error) => {
     console.error('IndiaSearch partial load failed:', error);
-    document.body.innerHTML = '<main class="main-wrap"><p>Page load nahi ho paaya. Please local server ya deployed site se open karein.</p></main>';
+    document.body.innerHTML = '<main class="main-wrap"><p>The page could not be loaded. Please open it from the local server or deployed website.</p></main>';
   });
