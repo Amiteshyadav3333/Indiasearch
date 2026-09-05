@@ -116,7 +116,6 @@ body {
 /* Primary search navigation + More services */
 .filter-bar {
   position: relative;
-  overflow: visible !important;
 }
 
 .filter-pill.primary-ai {
@@ -141,17 +140,17 @@ body {
 }
 
 .more-services-menu {
-  position: fixed;
+  position: absolute;
   z-index: 600;
+  top: 100%;
+  left: 0;
+  right: 0;
   padding: 18px;
   border: 1px solid var(--border);
-  border-radius: 22px;
-  background: color-mix(in srgb, var(--bg-card) 94%, transparent);
+  border-radius: 0 0 22px 22px;
+  background: color-mix(in srgb, var(--bg-card) 97%, transparent);
   box-shadow: var(--shadow-lg);
   backdrop-filter: blur(18px);
-  max-width: min(680px, 96vw);
-  left: 50%;
-  transform: translateX(-50%);
 }
 
 .more-services-menu[hidden] {
@@ -2552,14 +2551,19 @@ body {
 /* ═══════════════════════════════════════════
    FILTER BAR
 ═══════════════════════════════════════════ */
+.filter-bar-wrap {
+  position: relative;
+  border-bottom: 1.5px solid var(--border);
+  margin-bottom: 20px;
+}
+
 .filter-bar {
   display: flex;
   gap: 8px;
-  padding: 10px 12px 16px;
+  padding: 10px 12px 12px;
   overflow-x: auto;
+  overflow-y: visible;
   scrollbar-width: none;
-  border-bottom: 1.5px solid var(--border);
-  margin-bottom: 20px;
   -webkit-overflow-scrolling: touch;
   -ms-overflow-style: none;
 }
@@ -2570,11 +2574,11 @@ body {
 
 @media (max-width: 600px) {
   .filter-bar {
-    gap: 4px;
-    padding: 8px 8px 12px;
+    gap: 5px;
+    padding: 8px 8px 10px;
   }
   .filter-pill {
-    padding: 5px 9px 10px;
+    padding: 5px 9px;
     font-size: 12px;
     white-space: nowrap;
     flex-shrink: 0;
@@ -8372,10 +8376,15 @@ body {
 /* Responsive design for split layout */
 .prx-split-layout {
   display: flex;
-  flex-direction: row !important; /* Keep side-by-side on all screens */
-  gap: 20px;
+  flex-direction: row;
+  gap: 24px;
   margin-bottom: 24px;
   align-items: flex-start;
+}
+
+.prx-answer-column {
+  flex: 1;
+  min-width: 0;
 }
 
 .prx-sidebar-column {
@@ -8383,53 +8392,26 @@ body {
   flex-shrink: 0;
   border-left: 1px solid var(--border);
   padding-left: 16px;
-  display: block !important; /* Always show */
 }
 
-@media (max-width: 768px) {
+/* ── PHONE: Perplexity style ─ full width, no sidebar ── */
+@media (max-width: 700px) {
+  .prx-split-layout {
+    flex-direction: column;
+    gap: 0;
+  }
   .prx-sidebar-column {
-    width: 170px;
-    padding-left: 10px;
+    display: none !important;
   }
-  .prx-sidebar-column .prx-source-card {
-    min-height: 54px;
-    padding: 8px;
+  .prx-answer-column {
+    width: 100%;
   }
-  .prx-sidebar-column .prx-source-title {
-    font-size: 10px;
-    margin-bottom: 4px;
+  .prx-inline-sources {
+    display: block !important;
   }
-  .prx-sidebar-column .prx-source-domain {
-    font-size: 9px;
-  }
-}
-
-@media (max-width: 480px) {
-  .prx-sidebar-column {
-    width: 120px;
-    padding-left: 8px;
-    gap: 4px;
-  }
-  .prx-sidebar-column .prx-source-card {
-    min-height: 48px;
-    padding: 6px;
-    border-radius: 6px;
-  }
-  .prx-sidebar-column .prx-source-title {
-    font-size: 9px;
-    margin-bottom: 2px;
-  }
-  .prx-sidebar-column .prx-source-domain {
-    display: none;
-  }
-  .prx-sidebar-column .prx-source-fav {
-    width: 10px;
-    height: 10px;
-  }
-  .prx-sidebar-column .prx-source-n {
-    width: 12px;
-    height: 12px;
-    font-size: 8px;
+  .prx-query-title {
+    font-size: 18px;
+    margin-bottom: 14px;
   }
 }
 
@@ -8598,6 +8580,20 @@ body.map-fullscreen-open {
 }
 
 /* ── Inline Sources below AI answer ── */
+/* Desktop: inline sources hidden (sidebar shows them) */
+@media (min-width: 701px) {
+  .prx-inline-sources {
+    display: none;
+  }
+}
+
+/* Desktop: inline sources hidden (sidebar shows them) */
+@media (min-width: 701px) {
+  .prx-inline-sources {
+    display: none;
+  }
+}
+
 .prx-inline-sources {
   margin-top: 20px;
   padding-top: 16px;

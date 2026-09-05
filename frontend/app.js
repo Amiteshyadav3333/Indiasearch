@@ -35,7 +35,7 @@ const micButtonAi = document.getElementById("micButtonAi");
 const mainWrap = document.querySelector(".main-wrap");
 
 const heroSection = document.getElementById("heroSection");
-const searchFiltersDiv = document.getElementById("searchFilters");
+const searchFiltersDiv = document.getElementById("searchFiltersWrap");
 const trendingContainer = document.getElementById("trendingContainer");
 const historyBox = document.getElementById("searchHistory");
 const paginationContainer = document.getElementById("pagination");
@@ -479,10 +479,6 @@ function toggleMoreServices(event) {
   const button = document.getElementById("moreServicesButton");
   if (!menu || !button) return;
   const willOpen = menu.hidden;
-  if (willOpen) {
-    const rect = button.getBoundingClientRect();
-    menu.style.top = (rect.bottom + 8) + "px";
-  }
   menu.hidden = !willOpen;
   button.setAttribute("aria-expanded", String(willOpen));
 }

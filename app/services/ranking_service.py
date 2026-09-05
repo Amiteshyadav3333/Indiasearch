@@ -52,7 +52,48 @@ INDIA_PUBLIC_INTEREST_DOMAINS = (
     "gov.in", "nic.in", "ac.in", "res.in", "org.in", "co.in",
     "uidai.gov.in", "incometax.gov.in", "indianrail.gov.in", "irctc.co.in",
     "ecourts.gov.in", "data.gov.in", "ncs.gov.in", "agmarknet.gov.in",
+    "ssc.nic.in", "upsc.gov.in", "cbse.nic.in", "ncert.nic.in",
+    "indianexpress.com", "thehindu.com", "ndtv.com", "timesofindia.com",
+    "hindustantimes.com", "indiatimes.com", "zeebiz.com", "moneycontrol.com",
+    "sarkariresult.com", "freejobalert.com", "sarkari naukri.com", "jobsbank.in",
+    "railway recruitment.com", "ssc adda.com", "bankersadda.com",
 )
+
+# Indian news domains with high priority
+INDIAN_NEWS_DOMAINS = {
+    "ndtv.com": 0.5,
+    "thehindu.com": 0.5,
+    "indianexpress.com": 0.45,
+    "timesofindia.com": 0.4,
+    "hindustantimes.com": 0.4,
+    "indiatimes.com": 0.35,
+    "zeebiz.com": 0.35,
+    "business-standard.com": 0.35,
+    "livemint.com": 0.35,
+    "economictimes.indiatimes.com": 0.35,
+}
+
+# Indian government/edu domains
+INDIAN_GOV_EDU_DOMAINS = {
+    "gov.in": 0.8,
+    "nic.in": 0.75,
+    "ac.in": 0.7,
+    "res.in": 0.7,
+    "org.in": 0.6,
+    "co.in": 0.5,
+    "uidai.gov.in": 0.9,
+    "incometax.gov.in": 0.9,
+    "indianrail.gov.in": 0.85,
+    "irctc.co.in": 0.8,
+    "ecourts.gov.in": 0.85,
+    "data.gov.in": 0.8,
+    "ncs.gov.in": 0.8,
+    "agmarknet.gov.in": 0.8,
+    "ssc.nic.in": 0.85,
+    "upsc.gov.in": 0.9,
+    "cbse.nic.in": 0.85,
+    "ncert.nic.in": 0.85,
+}
 
 
 def _query_match_score(result: dict, query: str) -> float:
@@ -93,12 +134,25 @@ def _india_relevance(url: str, title: str = "", snippet: str = "") -> float:
         domain = ""
     text = f"{title} {snippet}".lower()
     score = 0.0
-    if domain.endswith(".in") or any(domain.endswith(d) for d in INDIA_PUBLIC_INTEREST_DOMAINS):
-        score += 1.15
-    if domain.endswith(("gov.in", "nic.in")):
-        score += 0.85
-    india_terms = ("india", "bharat", "भारतीय", "भारत", "indian", "sarkari", "सरकारी")
-    score += min(0.45, sum(term in text for term in india_terms) * 0.15)
+    
+    # 1. Indian TLD boost (Heavy)
+    if domain.endswith(".in"):
+        score += 1.2
+    
+    # 2. Indian government/edu domains (Very Heavy)
+    for d, bonus in INDIAN_GOV_EDU_DOMAINS.items():
+        if domain.endswith(d):
+            score += bonus
+    
+    # 3. Indian news domains (Heavy)
+    for d, bonus in INDIAN_NEWS_DOMAINS.items():
+        if domain.endswith(d):
+            score += bonus
+    
+    # 4. India terms in text
+    india_terms = ("india", "bharat", "भारतीय", "भारत", "indian", "sarkari", "सरकारी", "naukri", "job", "government", "central", "state")
+    score += min(0.5, sum(term in text for term in india_terms) * 0.12)
+    
     return score
 
 
