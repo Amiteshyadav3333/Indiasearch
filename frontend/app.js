@@ -2767,7 +2767,7 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
         <div class="result-item">
           <div class="result-site-line">
             <div class="result-favicon">
-              <img class="result-favicon-img" src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" onerror="this.parentElement.textContent='🌐'">
+              <img class="result-favicon-img" src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=32" alt="" loading="lazy" onerror="this.parentElement.textContent='🌐'">
             </div>
             <span class="result-host">${host}</span>
           </div>
@@ -3166,7 +3166,38 @@ function renderGoogleStyleAIMode(data) {
     const answer = data.answer || '';
     const sources = data.sources || [];
 
-    // ── Follow-up chips ──
+    // Right-side sources (Google-style with favicon + title)
+    const rightSourcesHtml = sources.slice(0, 6).map((src, idx) => {
+        let domain = 'source';
+        try { domain = new URL(src.url || '').hostname.replace(/^www\./, ''); } catch(e) {}
+        const fav = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+        const title = escapeHtml(src.title || domain);
+        return `<a href="${escapeHtml(src.url || '#')}" target="_blank" rel="noopener" class="prx-right-source">
+          <span class="prx-right-source-n">${idx + 1}</span>
+          <img src="${fav}" class="prx-right-source-fav" onerror="this.style.display='none'" alt="">
+          <span class="prx-right-source-title" title="${title}">${title}</span>
+        </a>`;
+    }).join('');
+
+    // Inline source chips shown below the answer
+    const inlineSourcesHtml = sources.length > 0 ? `
+      <div class="prx-inline-sources">
+        <div class="prx-inline-sources-label">Sources</div>
+        <div class="prx-inline-sources-list">
+          ${sources.slice(0, 6).map((src, idx) => {
+            let domain = 'source';
+            try { domain = new URL(src.url || '').hostname.replace(/^www\./, ''); } catch(e) {}
+            const fav = `https://www.google.com/s2/favicons?domain=${domain}&sz=16`;
+            return `<a href="${escapeHtml(src.url || '#')}" target="_blank" rel="noopener" class="prx-inline-src-chip">
+              <img src="${fav}" onerror="this.style.display='none'" alt="">
+              <span>${escapeHtml(src.title || domain)}</span>
+              <span class="prx-inline-src-n">${idx + 1}</span>
+            </a>`;
+          }).join('')}
+        </div>
+      </div>` : '';
+
+    // Follow-up chips
     const followUps = generateFollowUps(query);
     const chipsHtml = followUps.map(q =>
         `<button class="prx-followup-chip" onclick="aiFollowup('${q.replace(/'/g, "\\'")}')">
@@ -3180,27 +3211,27 @@ function renderGoogleStyleAIMode(data) {
 
     const html = `
     <div class="prx-answer-container" id="${uid}">
-      <!-- Query Title -->
       <h1 class="prx-query-title">${escapeHtml(query)}</h1>
-
-      <!-- Full-Width Answer Layout (No references/sidebar column) -->
       <div class="prx-split-layout">
-        <div class="prx-answer-column" style="width: 100%;">
+        <div class="prx-answer-column">
           <div class="prx-answer-body">${answeredHtml}</div>
+          ${inlineSourcesHtml}
         </div>
+        ${sources.length > 0 ? `
+          <div class="prx-sidebar-column">
+            <div class="prx-sidebar-title">References</div>
+            <div class="prx-right-sources-list">${rightSourcesHtml}</div>
+          </div>` : ''}
       </div>
-
-      <!-- Related Section -->
       ${chipsHtml ? `
         <div class="prx-section-header" style="margin-top:24px;">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="margin-right:6px; vertical-align:middle;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="margin-right:6px;vertical-align:middle;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
           Related
         </div>
         <div class="prx-chips-container">${chipsHtml}</div>
       ` : ''}
-      
       <div class="prx-footer">
-        <span>IndiaSearch AI</span> • <span>AI answers may contain errors</span>
+        <span>IndiaSearch AI</span> &bull; <span>AI answers may contain errors</span>
       </div>
     </div>`;
 
