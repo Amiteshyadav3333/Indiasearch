@@ -479,6 +479,10 @@ function toggleMoreServices(event) {
   const button = document.getElementById("moreServicesButton");
   if (!menu || !button) return;
   const willOpen = menu.hidden;
+  if (willOpen) {
+    const rect = button.getBoundingClientRect();
+    menu.style.top = (rect.bottom + 8) + "px";
+  }
   menu.hidden = !willOpen;
   button.setAttribute("aria-expanded", String(willOpen));
 }
@@ -3637,18 +3641,23 @@ async function deletePublication(pubId) {
 }
 
 // ── Settings & Legal Modals Controller ──
+function updateSettingsThemeBtn() {
+  const theme = document.documentElement.getAttribute("data-theme") || "dark";
+  const icon = document.getElementById("settingsThemeIcon");
+  const label = document.getElementById("settingsThemeLabel");
+  if (icon) icon.textContent = theme === "dark" ? "☀️" : "🌙";
+  if (label) label.textContent = theme === "dark" ? "Light" : "Dark";
+}
+
 function openSettingsModal(e) {
   if (e) e.preventDefault();
-  
-  // Load current settings into DOM inputs
   const selectSafe = document.getElementById("settingsSafeSearch");
   const selectCount = document.getElementById("settingsResultsCount");
   const checkAutoPlay = document.getElementById("settingsAutoPlayVoice");
-  
   if (selectSafe) selectSafe.value = appSettings.safeSearch;
   if (selectCount) selectCount.value = String(appSettings.resultsCount);
   if (checkAutoPlay) checkAutoPlay.checked = appSettings.autoPlayVoice;
-  
+  updateSettingsThemeBtn();
   const modal = document.getElementById("settingsModal");
   if (modal) modal.style.display = "flex";
 }

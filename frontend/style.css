@@ -141,17 +141,17 @@ body {
 }
 
 .more-services-menu {
-  position: absolute;
-  z-index: 500;
-  top: calc(100% + 10px);
-  left: 0;
-  right: 0;
+  position: fixed;
+  z-index: 600;
   padding: 18px;
   border: 1px solid var(--border);
   border-radius: 22px;
   background: color-mix(in srgb, var(--bg-card) 94%, transparent);
   box-shadow: var(--shadow-lg);
   backdrop-filter: blur(18px);
+  max-width: min(680px, 96vw);
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 .more-services-menu[hidden] {
@@ -4561,50 +4561,9 @@ body {
    DARK MODE FAB (FIXED BOTTOM RIGHT)
 ═══════════════════════════════════════════ */
 .theme-fab {
-  position: fixed;
-  bottom: 28px;
-  right: 24px;
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
-  border: none;
-  background: var(--bg-card);
-  border: 1.5px solid var(--border);
-  box-shadow: var(--shadow-lg);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1100;
-  transition: all var(--transition-bounce);
-  color: var(--text-primary);
-}
-
-.theme-fab:hover {
-  transform: scale(1.1) rotate(15deg);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-  border-color: var(--accent-blue);
-}
-
-.theme-fab:active {
-  transform: scale(0.95);
-}
-
-.fab-sun {
-  display: flex;
-}
-
-.fab-moon {
   display: none;
 }
 
-[data-theme="dark"] .fab-sun {
-  display: none;
-}
-
-[data-theme="dark"] .fab-moon {
-  display: flex;
-}
 
 /* ═══════════════════════════════════════════
    OVERLAY MODALS
