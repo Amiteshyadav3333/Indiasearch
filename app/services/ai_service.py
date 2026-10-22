@@ -192,17 +192,21 @@ def _extractive_summary(query, docs, lang="English", advanced=False):
     usable = [usable[index] for _, index, _ in relevant]
 
     if advanced:
-        bullets = []
-        for idx, title, text, _ in usable[:6]:
-            summary = text or title
-            summary = re.sub(r"\s+", " ", summary)[:260]
-            bullets.append(f"- **{title or 'Source'}** [{idx}]: {summary}")
-        answer = (
-            f"## Answer\nBased on the strongest available sources for **{query}**, here is the clearest synthesis.\n\n"
-            + "\n".join(bullets)
-            + "\n\n## What to check next\nOpen the cited sources for the latest details, dates, prices, or official notices."
-        )
-        return _translate_to_language(answer, lang)
+        # When live model credentials are unavailable, answer with relevant
+        # source text as a readable paragraph. Source cards are rendered by the
+        # UI separately, so don't repeat titles, links, or a list of search hits.
+        statements = []
+        for idx, title, text, _ in usable[:3]:
+            excerpt = text or title
+            excerpt = re.sub(r"\[([^\]]+)\]\(https?://[^)]+\)", r"\1", excerpt)
+            excerpt = re.sub(r"https?://\S+", "", excerpt)
+            excerpt = re.sub(r"\s+", " ", excerpt).strip(" -|\t")[:340]
+            if not excerpt:
+                continue
+            localized = _translate_to_language(excerpt, lang)
+            if localized:
+                statements.append(f"{localized} [{idx}]")
+        return " ".join(statements) if statements else _localized_no_answer(lang)
 
     first = usable[0]
     supporting = " ".join((text or title) for _, title, text, _ in usable[:3])
@@ -244,7 +248,7 @@ def _system_prompt(lang, intent="general", has_pdf=False):
     if intent == "nutrition":
         return f"You are a careful nutrition assistant. {language_rule} {grounding_rule} {evidence_rule} Return valid JSON only; all human-readable values must be in {lang}."
     if intent == "advanced":
-        return f"You are a careful research assistant. {language_rule} {grounding_rule} {evidence_rule} Start with the answer itself. Do not repeat the question, mention that you are synthesizing sources, or add a generic 'what to check next' section. Use short paragraphs or concise bullets only when they improve readability."
+        return f"You are a careful research assistant. {language_rule} {grounding_rule} {evidence_rule} Start with a direct answer in concise prose. Do not repeat the question, list source titles or snippets, include source URLs, mention that you are synthesizing sources, or add a generic 'what to check next' section. Use only inline numeric citations such as [1]; the interface displays source links separately."
     if has_pdf:
         return f"You answer questions about uploaded documents. {language_rule} {grounding_rule} {evidence_rule}"
     return f"You are a precise search assistant. {language_rule} {grounding_rule} {evidence_rule} Keep the answer concise and relevant."
