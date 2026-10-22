@@ -1,14 +1,12 @@
 services:
   - type: web
     name: indiasearch
-    runtime: python
+    runtime: docker
     plan: free
-    buildCommand: pip install --no-cache-dir -r requirements.txt
-    startCommand: gunicorn app.main:app -k uvicorn.workers.UvicornWorker --workers 1 --threads 1 --max-requests 500 --max-requests-jitter 50 --timeout 120 --bind 0.0.0.0:$PORT
+    dockerfilePath: ./docker/Dockerfile
+    dockerContext: .
     healthCheckPath: /
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.0
       - key: RENDER
         value: "true"
       - key: DISABLE_CRAWLER
