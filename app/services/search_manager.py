@@ -281,6 +281,36 @@ async def run_parallel_pipeline(query: str, page: int = 1, filter: str = "all", 
                 "error": "Adult content detected.",
                 "requires_age_verification": True
             }
+
+    # Uploaded documents take precedence over web search. This avoids unrelated
+    # search results leaking into a PDF answer and avoids caching private text.
+    if pdf_content:
+        answer = await asyncio.to_thread(
+            ai_service.generate_ai_summary,
+            query=query,
+            docs=[],
+            ai_mode=True,
+            lang=output_language,
+            pdf_content=pdf_content,
+            intent="pdf",
+            history=history,
+        )
+        return {
+            "results": [],
+            "intent": "pdf",
+            "ad_slots": [],
+            "special_data": None,
+            "top_images": [],
+            "knowledge_panel": None,
+            "ai_summary": answer,
+            "ai_sources": [],
+            "total": 0,
+            "sources_used": ["pdf"],
+            "quota_status": api_client.get_quota_status(),
+            "took_ms": round((time.time() - start_time) * 1000, 1),
+            "from_cache": False,
+            "location": None,
+        }
     
     # ── Step 1: Identify Intent ────────────────────────────
     intent = await identify_intent(en_query)

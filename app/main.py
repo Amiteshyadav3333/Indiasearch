@@ -288,7 +288,9 @@ async def upload_pdf(file: UploadFile = File(...), session_token: str | None = F
     sess = session_token or "guest"
     try:
         reader = PyPDF2.PdfReader(file.file)
-        text = "".join([p.extract_text() for p in reader.pages])
+        text = "\n\n".join((page.extract_text() or "").strip() for page in reader.pages).strip()
+        if not text:
+            return JSONResponse({"error": "This PDF has no selectable text. Scanned PDFs are not supported yet."}, 422)
         PDF_STORE[sess] = text[:50000]
         logger.info(f"[PDF] Uploaded for session {sess}. Extracted {len(text)} chars.")
         return {"message": f"PDF Processed. {len(text)} characters extracted."}
@@ -482,14 +484,46 @@ async def delete_med(media_id: int, session_token: str):
 
 # --- AI Mode Endpoint (Google-style AI answers) ---
 @app.get("/ai-mode")
-async def ai_mode_search(q: str, lang: str = "en", advanced_mode: bool = False, lat: float | None = None, lon: float | None = None):
+async def ai_mode_search(
+    q: str,
+    lang: str = "en",
+    advanced_mode: bool = False,
+    lat: float | None = None,
+    lon: float | None = None,
+    session_token: str | None = None,
+    history: str | None = None,
+):
     """
     Google-style AI Mode: Returns AI-generated answer with sources and images.
     Falls back to the parallel search pipeline (DuckDuckGo + web) when
     Elasticsearch is unavailable (e.g. Railway deployment without ES).
     """
     try:
+        history_items = []
+        if history:
+            try:
+                parsed_history = json.loads(history)
+                if isinstance(parsed_history, list):
+                    history_items = parsed_history
+            except (TypeError, ValueError):
+                logger.warning("[AI Mode] Ignoring invalid conversation history")
+
+        pdf_content = PDF_STORE.get(session_token or "guest")
+        if pdf_content:
+            answer = await asyncio.to_thread(
+                ai_summary.generate_ai_summary,
+                query=q,
+                docs=[],
+                ai_mode=True,
+                lang=lang,
+                pdf_content=pdf_content,
+                intent="pdf",
+                history=history_items,
+            )
+            return {"answer": answer, "sources": [], "images": [], "query": q, "source_type": "pdf"}
+
         results = []
+        pipeline_answer = None
 
         # --- Try Elasticsearch first (fast local index) ---
         from app.integrations.elastic_client import ElasticClient
@@ -515,7 +549,7 @@ async def ai_mode_search(q: str, lang: str = "en", advanced_mode: bool = False, 
                     pdf_content=None,
                     age_verified=False,
                     advanced_mode=advanced_mode,
-                    history=None,
+                    history=history_items,
                     lat=lat,
                     lon=lon,
                     limit=10,
@@ -523,19 +557,22 @@ async def ai_mode_search(q: str, lang: str = "en", advanced_mode: bool = False, 
                 # pipeline_response is a dict with a "results" key
                 if isinstance(pipeline_response, dict):
                     results = pipeline_response.get("results") or []
+                    pipeline_answer = pipeline_response.get("ai_summary")
             except Exception as pipe_err:
                 logger.error(f"[AI Mode] Pipeline fallback failed: {pipe_err}")
 
         if not results:
             return {
-                "answer": "I couldn't find relevant information. Try a different query.",
+                "answer": pipeline_answer or ai_summary.generate_ai_summary(
+                    query=q, docs=[], ai_mode=True, lang=lang, history=history_items
+                ),
                 "sources": [],
                 "images": [],
                 "query": q,
             }
 
         # Generate Google-style AI answer
-        answer = generate_google_style_ai_answer(q, results, lang)
+        answer = pipeline_answer or generate_google_style_ai_answer(q, results, lang, history=history_items)
 
         # Format sources with images
         sources = []

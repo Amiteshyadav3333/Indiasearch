@@ -2240,9 +2240,31 @@ function renderAiSourcesIcons(sources = []) {
   return "";
 }
 
-function renderMarkdownWithCitations(markdown = "", sources = []) {
-  const linkedText = String(markdown).replace(/\[(\d+)\]/g, (match, number) => {
-    return `<span class="ai-citation-plain">[${number}]</span>`;
+function renderMarkdownWithCitations(markdown = "", sources = [], query = "") {
+  const sourceList = Array.isArray(sources) ? sources : [];
+  let formatted = String(markdown)
+    .replace(/\r\n?/g, "\n")
+    .replace(/([^\n])\s+(#{1,3}\s+)/g, "$1\n\n$2")
+    .replace(/([.!?।])\s+(-\s+\*\*)/g, "$1\n\n$2")
+    .replace(/([^\n])\s+(\*\s+\*\*)/g, "$1\n\n$2")
+    .replace(/Based on the strongest available sources for .+?, here is the clearest synthesis\.?/i, "")
+    .replace(/सबसे मजबूत उपलब्ध स्रोतों के आधार पर उत्तर दें[^।]*।?/i, "");
+
+  // Remove a generated heading when it only repeats the current query.
+  formatted = formatted.replace(/^\s*#{1,3}\s+([^\n]+)\n+/m, (heading, title) => {
+    const queryTitle = String(query || "").trim();
+    return queryTitle && title.replace(/[*_`]/g, "").trim().toLocaleLowerCase() === queryTitle.toLocaleLowerCase() ? "" : heading;
+  });
+
+  const linkedText = formatted.replace(/\[(\d+)\]/g, (match, number) => {
+    const src = sourceList[Number(number) - 1];
+    const url = src?.url || "";
+    if (!/^https?:\/\//i.test(url)) {
+      return `<span class="ai-citation-plain" title="Source ${number}">[${number}]</span>`;
+    }
+    const safeUrl = escapeHtml(url);
+    const label = escapeHtml(src.title || `Source ${number}`);
+    return `<a class="ai-citation" data-source-url="${safeUrl}" href="${safeUrl}" target="_blank" rel="noopener noreferrer" title="${label}">[${number}]</a>`;
   });
 
   return marked.parse(linkedText);
@@ -2364,7 +2386,17 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
     
     // Use new /ai-mode endpoint for true AI mode
     if (aiMode) {
-      const aiRes = await fetchWithApiFallback(`/ai-mode?q=${encodeURIComponent(query)}&lang=${targetLang}`);
+      const aiParams = new URLSearchParams({
+        q: query,
+        lang: targetLang,
+        session_token: appState.guestId,
+        history: JSON.stringify(chatHistory.slice(-8))
+      });
+      if (appState.location) {
+        aiParams.set("lat", String(appState.location.lat));
+        aiParams.set("lon", String(appState.location.lon));
+      }
+      const aiRes = await fetchWithApiFallback(`/ai-mode?${aiParams}`);
       const aiData = await aiRes.json();
 
       if (aiData.answer) {
@@ -2493,7 +2525,7 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
               </div>
               ${renderVoiceButton("Listen to answer")}
             </div>
-            <div class="summary-text">${renderMarkdownWithCitations(rawText, aiSources)}</div>
+            <div class="summary-text">${renderMarkdownWithCitations(rawText, aiSources, query)}</div>
           </div>`;
       }
     }
@@ -2555,10 +2587,10 @@ async function search(pageNumber = 1, aiMode = false, options = {}) {
                       const parsed = JSON.parse(jsonStr);
                       target.innerHTML = renderNutritionPanel(parsed);
                   } catch(e) {
-                      target.innerHTML = renderMarkdownWithCitations(rawText, aiSources);
+                      target.innerHTML = renderMarkdownWithCitations(rawText, aiSources, query);
                   }
               } else {
-               const finalMd = renderMarkdownWithCitations(rawText, aiSources);
+               const finalMd = renderMarkdownWithCitations(rawText, aiSources, query);
                target.innerHTML = finalMd; // Run through markdown parser once done
                
                // After typing is done, push to history if not already there
@@ -3206,7 +3238,7 @@ function renderGoogleStyleAIMode(data) {
          </button>`
     ).join('');
 
-    const answeredHtml = renderMarkdownWithCitations(answer, sources);
+    const answeredHtml = renderMarkdownWithCitations(answer, sources, query);
     const uid = `prx_${Date.now()}`;
 
     const html = `
