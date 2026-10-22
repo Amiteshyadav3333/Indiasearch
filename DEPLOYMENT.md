@@ -51,7 +51,7 @@ git push -u origin main
    ELASTIC_USERNAME=elastic
    ELASTIC_PASSWORD=your_password
    ```
-6. Railway will auto-detect and deploy
+6. Railway uses `railway.json` to build and deploy the service with Docker.
 7. **Copy your Railway URL**: `https://indiasearch-production.up.railway.app`
 
 ### 4️⃣ Frontend Deploy - Vercel (3 minutes)

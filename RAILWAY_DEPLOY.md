@@ -13,10 +13,9 @@
 3. Choose: **indiasearch** repository
 4. Click: **Deploy Now**
 
-Railway will automatically:
-- ✅ Detect Python
-- ✅ Install dependencies from requirements.txt
-- ✅ Start your app using Procfile
+Railway uses `railway.json` to build the service with `docker/Dockerfile`.
+The Docker image installs `requirements.txt` and starts the FastAPI app using
+Railway's runtime `PORT` value.
 
 ## Step 3: Add Environment Variables
 
@@ -88,8 +87,8 @@ Save this URL - you'll need it for Vercel frontend!
 
 **Deployment failed?**
 - Check Logs tab for errors
-- Verify requirements.txt exists
-- Check Procfile syntax
+- Verify `docker/Dockerfile` and `requirements.txt` are in the GitHub branch
+- Check the Railway build logs for Dockerfile errors
 
 **CORS error from Vercel?**
 - Verify `FRONTEND_ORIGINS` is set correctly in Railway

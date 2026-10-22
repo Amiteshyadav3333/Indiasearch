@@ -43,6 +43,9 @@
 
 5. ✅ Deployment start ho jayega (1-2 minutes lagenge)
 
+Railway `railway.json` ke zariye `docker/Dockerfile` se backend image banata hai.
+Dockerfile dependencies install karke app ko Railway ke `PORT` par start karta hai.
+
 ---
 
 ### STEP 3: Environment Variables Add Karo (3 min)
@@ -162,8 +165,8 @@ https://YOUR-RAILWAY-URL.up.railway.app
 ### Issue 1: "Build Failed"
 **Solution:**
 - Logs check karo
-- Verify `requirements.txt` GitHub pe hai
-- Verify `Procfile` GitHub pe hai
+- Verify `docker/Dockerfile` aur `requirements.txt` GitHub pe hain
+- Railway build logs mein Dockerfile error dekho
 
 ### Issue 2: "Application Error"
 **Solution:**

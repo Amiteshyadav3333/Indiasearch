@@ -64,7 +64,8 @@ Visit: http://localhost:8000
    ELASTIC_USERNAME=your_username
    ELASTIC_PASSWORD=your_password
    ```
-5. Deploy!
+5. Railway uses `railway.json` to build the backend with `docker/Dockerfile`.
+   Render uses the same Dockerfile through `render.yaml`.
 
 ### 3. Frontend Deploy (Vercel)
 1. Create `frontend` folder with HTML/CSS/JS
