@@ -11,6 +11,25 @@ Multi-language search engine with AI summaries, spam detection, and fake news fi
 
 ## 📦 Local Setup
 
+### Run with Docker (recommended)
+
+Docker Compose runs the FastAPI app and Redis locally. Elasticsearch can use the
+configured Elasticsearch Cloud deployment; if it is not configured, the app's
+existing fallback search providers are still available.
+
+```bash
+cp -n .env.example .env
+# Add your Elasticsearch and optional API credentials to .env
+docker compose up --build
+```
+
+Open http://localhost:8000. Stop the services with `docker compose down`; Redis
+data is kept in a named Docker volume. The `.env` file stays on your machine and
+is excluded from the Docker build context. The Compose setup disables the
+automatic crawler to keep local startup lightweight.
+
+### Run without Docker
+
 ```bash
 # Install dependencies
 pip install -r requirements.txt

@@ -1,0 +1,15 @@
+.git
+.venv
+venv
+__pycache__
+*.py[cod]
+.env
+.env.*
+!.env.example
+*.db
+*.sqlite*
+uploads
+scratch
+Indiasearch/server.log
+Indiasearch/server.pid
+frontend/node_modules
